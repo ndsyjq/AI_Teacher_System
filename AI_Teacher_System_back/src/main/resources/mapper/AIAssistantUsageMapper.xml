@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.ai_teacher_system_back.mapper.AIAssistantUsageMapper">
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.example.ai_teacher_system_back.entity.AIAssistantUsage">
+        <id column="id" property="id" />
+        <result column="user_id" property="userId" />
+        <result column="query_content" property="queryContent" />
+        <result column="response_content" property="responseContent" />
+        <result column="usage_time" property="usageTime" />
+    </resultMap>
+    
+    <!-- 插入AI助手使用记录 -->
+    <insert id="insert" parameterType="com.example.ai_teacher_system_back.entity.AIAssistantUsage" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ai_assistant_usage (
+            user_id, query_content, response_content, usage_time
+        ) VALUES (
+            #{userId}, #{queryContent}, #{responseContent}, #{usageTime}
+        )
+    </insert>
+    
+    <!-- 根据用户ID查询AI助手使用记录列表 -->
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT * FROM ai_assistant_usage WHERE user_id = #{userId} ORDER BY usage_time DESC
+    </select>
+    
+    <!-- 根据ID查询AI助手使用记录 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT * FROM ai_assistant_usage WHERE id = #{id}
+    </select>
+    
+    <!-- 查询用户最近的AI助手使用记录 -->
+    <select id="selectRecentByUserId" resultMap="BaseResultMap">
+        SELECT * FROM ai_assistant_usage 
+        WHERE user_id = #{userId} 
+        ORDER BY usage_time DESC 
+        LIMIT #{limit}
+    </select>
+    
+    <!-- 统计用户AI助手使用次数 -->
+    <select id="countByUserId" resultType="int">
+        SELECT COUNT(*) FROM ai_assistant_usage WHERE user_id = #{userId}
+    </select>
+</mapper>
