@@ -6,7 +6,7 @@ const aiAssistantService = {
   sendMessage(content) {
     // 确保传递的是普通字符串，而不是响应式对象
     const messageContent = typeof content === 'object' && content.value !== undefined ? content.value : content;
-    return api.post('/api/ai-assistant/send-message', { content: messageContent });
+    return api.post('/api/ai-assistant/send-message', { content: messageContent }, { timeout: 20000 });
   },
   
   // 获取历史对话记录

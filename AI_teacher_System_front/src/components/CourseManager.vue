@@ -1,6 +1,8 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import * as echarts from 'echarts';
+import { ElMessage, ElLoading } from 'element-plus';
+import { courseService } from '../services';
 // 引入echarts，需要先安装：npm install echarts --save
 
 // 课程表单数据
@@ -12,39 +14,30 @@ const courseForm = reactive({
   description: ''
 });
 
-// 模拟课程数据
-const courses = ref([
-  {
-    id: 1,
-    name: '高中数学必修一',
-    subject: '数学',
-    grade: '高一',
-    semester: '上学期',
-    students: 45,
-    progress: 70,
-    status: '进行中'
-  },
-  {
-    id: 2,
-    name: '高中物理必修二',
-    subject: '物理',
-    grade: '高一',
-    semester: '下学期',
-    students: 42,
-    progress: 30,
-    status: '进行中'
-  },
-  {
-    id: 3,
-    name: '高中语文必修三',
-    subject: '语文',
-    grade: '高二',
-    semester: '上学期',
-    students: 48,
-    progress: 0,
-    status: '未开始'
+// 课程数据
+const courses = ref([]);
+
+// 加载状态
+const loading = ref(false);
+
+// 获取课程列表
+const fetchCourses = async () => {
+  try {
+    loading.value = true;
+    const response = await courseService.getCourses();
+    if (response.code === 200) {
+      courses.value = response.data;
+    } else {
+      ElMessage.error(response.message || '获取课程列表失败');
+    }
+  } catch (error) {
+    console.error('获取课程列表出错:', error);
+    ElMessage.error('获取课程列表失败，请稍后重试');
+  } finally {
+    loading.value = false;
   }
-]);
+};
+
 
 // 当前激活的标签页
 const activeTab = ref('myCourses');
@@ -72,87 +65,27 @@ const openAddDialog = () => {
 };
 
 // 添加课程
-const addCourse = () => {
+const addCourse = async () => {
   if (!courseForm.name || !courseForm.subject || !courseForm.grade) {
-    // 这里应该有表单验证
+    ElMessage.warning('请填写必填项');
     return;
   }
   
-  // 模拟添加操作
-  courses.value.push({
-    id: courses.value.length + 1,
-    name: courseForm.name,
-    subject: courseForm.subject,
-    grade: courseForm.grade,
-    semester: courseForm.semester,
-    students: 0,
-    progress: 0,
-    status: '未开始'
-  });
-  
-  // 重置表单
-  courseForm.name = '';
-  courseForm.subject = '';
-  courseForm.grade = '';
-  courseForm.semester = '';
-  courseForm.description = '';
-  
-  // 关闭对话框
-  dialogVisible.value = false;
-};
-
-// 查看课程详情
-const viewCourseDetail = (courseId) => {
-  // 查找选中的课程
-  currentCourse.value = courses.value.find(course => course.id === courseId);
-  if (currentCourse.value) {
-    detailDialogVisible.value = true;
-  }
-};
-
-// 打开编辑课程对话框
-const openEditDialog = (courseId) => {
-  // 查找选中的课程
-  currentCourse.value = courses.value.find(course => course.id === courseId);
-  if (currentCourse.value) {
-    // 将课程数据填充到表单中
-    courseForm.name = currentCourse.value.name;
-    courseForm.subject = currentCourse.value.subject;
-    courseForm.grade = currentCourse.value.grade;
-    courseForm.semester = currentCourse.value.semester;
-    courseForm.description = currentCourse.value.description || '';
+  try {
+    loading.value = true;
+    const courseData = {
+      name: courseForm.name,
+      subject: courseForm.subject,
+      grade: courseForm.grade,
+      semester: courseForm.semester,
+      description: courseForm.description
+    };
     
-    // 打开编辑对话框
-    editDialogVisible.value = true;
-  }
-};
-
-// 保存编辑的课程
-const saveEditedCourse = () => {
-  if (!courseForm.name || !courseForm.subject || !courseForm.grade) {
-    // 表单验证
-    return;
-  }
-  
-  // 更新课程数据
-  if (currentCourse.value) {
-    const index = courses.value.findIndex(course => course.id === currentCourse.value.id);
-    if (index !== -1) {
-      // 保留原有的id、学生数、进度和状态
-      const updatedCourse = {
-        ...courses.value[index],
-        name: courseForm.name,
-        subject: courseForm.subject,
-        grade: courseForm.grade,
-        semester: courseForm.semester,
-        description: courseForm.description
-      };
-      
-      // 更新课程
-      courses.value[index] = updatedCourse;
-      
-      // 关闭对话框
-      editDialogVisible.value = false;
+    const response = await courseService.addCourse(courseData);
+    if (response.code === 200) {
+      ElMessage.success('添加课程成功');
+      // 重新获取课程列表
+      await fetchCourses();
       
       // 重置表单
       courseForm.name = '';
@@ -161,14 +94,111 @@ const saveEditedCourse = () => {
       courseForm.semester = '';
       courseForm.description = '';
       
-      // 如果在分析页面，需要重新初始化图表
-      if (activeTab.value === 'courseAnalysis') {
-        setTimeout(() => {
-          initProgressChart();
-          initSubjectChart();
-          initProgressTrendChart();
-        }, 100);
+      // 关闭对话框
+      dialogVisible.value = false;
+    } else {
+      ElMessage.error(response.message || '添加课程失败');
+    }
+  } catch (error) {
+    console.error('添加课程出错:', error);
+    ElMessage.error('添加课程失败，请稍后重试');
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 查看课程详情
+const viewCourseDetail = async (courseId) => {
+  try {
+    loading.value = true;
+    const response = await courseService.getCourseDetail(courseId);
+    if (response.code === 200) {
+      currentCourse.value = response.data;
+      detailDialogVisible.value = true;
+    } else {
+      ElMessage.error(response.message || '获取课程详情失败');
+    }
+  } catch (error) {
+    console.error('获取课程详情出错:', error);
+    ElMessage.error('获取课程详情失败，请稍后重试');
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 打开编辑课程对话框
+const openEditDialog = async (courseId) => {
+  try {
+    loading.value = true;
+    const response = await courseService.getCourseDetail(courseId);
+    if (response.code === 200) {
+      currentCourse.value = response.data;
+      // 将课程数据填充到表单中
+      courseForm.name = currentCourse.value.name;
+      courseForm.subject = currentCourse.value.subject;
+      courseForm.grade = currentCourse.value.grade;
+      courseForm.semester = currentCourse.value.semester;
+      courseForm.description = currentCourse.value.description || '';
+      
+      // 打开编辑对话框
+      editDialogVisible.value = true;
+    } else {
+      ElMessage.error(response.message || '获取课程详情失败');
+    }
+  } catch (error) {
+    console.error('获取课程详情出错:', error);
+    ElMessage.error('获取课程详情失败，请稍后重试');
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 保存编辑的课程
+const saveEditedCourse = async () => {
+  if (!courseForm.name || !courseForm.subject || !courseForm.grade) {
+    ElMessage.warning('请填写必填项');
+    return;
+  }
+  
+  if (currentCourse.value) {
+    try {
+      loading.value = true;
+      const courseData = {
+        name: courseForm.name,
+        subject: courseForm.subject,
+        grade: courseForm.grade,
+        semester: courseForm.semester,
+        description: courseForm.description
+      };
+      
+      const response = await courseService.updateCourse(currentCourse.value.id, courseData);
+      if (response.code === 200) {
+        ElMessage.success('更新课程成功');
+        // 重新获取课程列表
+        await fetchCourses();
+        
+        // 关闭对话框
+        editDialogVisible.value = false;
+        
+        // 重置表单
+        courseForm.name = '';
+        courseForm.subject = '';
+        courseForm.grade = '';
+        courseForm.semester = '';
+        courseForm.description = '';
+        
+        // 如果在分析页面，需要重新初始化图表
+        if (activeTab.value === 'courseAnalysis') {
+          initCharts();
+        }
+      } else {
+        ElMessage.error(response.message || '更新课程失败');
       }
+    } catch (error) {
+      console.error('更新课程出错:', error);
+      ElMessage.error('更新课程失败，请稍后重试');
+    } finally {
+      loading.value = false;
     }
   }
 };
@@ -183,226 +213,319 @@ const confirmDeleteCourse = (courseId) => {
 };
 
 // 删除课程
-const deleteCourse = () => {
+const deleteCourse = async () => {
   if (currentCourse.value) {
-    // 从数组中删除课程
-    const index = courses.value.findIndex(course => course.id === currentCourse.value.id);
-    if (index !== -1) {
-      courses.value.splice(index, 1);
-      
-      // 关闭确认对话框
-      deleteConfirmVisible.value = false;
-      
-      // 如果在分析页面，需要重新初始化图表
-      if (activeTab.value === 'courseAnalysis') {
-        setTimeout(() => {
-          initProgressChart();
-          initSubjectChart();
-          initProgressTrendChart();
-        }, 100);
+    try {
+      loading.value = true;
+      const response = await courseService.deleteCourse(currentCourse.value.id);
+      if (response.code === 200) {
+        ElMessage.success('删除课程成功');
+        // 重新获取课程列表
+        await fetchCourses();
+        
+        // 关闭确认对话框
+        deleteConfirmVisible.value = false;
+        
+        // 如果在分析页面，需要重新初始化图表
+        if (activeTab.value === 'courseAnalysis') {
+          initCharts();
+        }
+      } else {
+        ElMessage.error(response.message || '删除课程失败');
       }
+    } catch (error) {
+      console.error('删除课程出错:', error);
+      ElMessage.error('删除课程失败，请稍后重试');
+    } finally {
+      loading.value = false;
     }
   }
 };
 
+// 初始化所有图表
+const initCharts = () => {
+  setTimeout(() => {
+    initProgressChart();
+    initSubjectChart();
+    initProgressTrendChart();
+  }, 100);
+};
+
 // 初始化课程进度图表
-const initProgressChart = () => {
+const initProgressChart = async () => {
   if (progressChartRef.value) {
-    progressChart = echarts.init(progressChartRef.value);
-    
-    const option = {
-      title: {
-        text: '课程进度概览',
-        left: 'center'
-      },
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: {
-          type: 'shadow'
+    try {
+      // 清除旧图表实例
+      if (progressChart) {
+        progressChart.dispose();
+      }
+      
+      progressChart = echarts.init(progressChartRef.value);
+      
+      // 获取进度概览数据
+      let chartData = courses.value;
+      try {
+        const response = await courseService.getProgressOverview();
+        if (response.code === 200) {
+          chartData = response.data;
         }
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '3%',
-        containLabel: true
-      },
-      xAxis: {
-        type: 'value',
-        max: 100,
-        name: '完成百分比'
-      },
-      yAxis: {
-        type: 'category',
-        data: courses.value.map(course => course.name),
-        axisLabel: {
-          width: 120,
-          overflow: 'truncate'
-        }
-      },
-      series: [
-        {
-          name: '课程进度',
-          type: 'bar',
-          data: courses.value.map(course => course.progress),
-          itemStyle: {
-            color: function(params) {
-              // 根据进度设置不同颜色
-              const progress = params.value;
-              if (progress === 0) return '#909399'; // 未开始
-              if (progress < 50) return '#E6A23C'; // 刚开始
-              if (progress < 100) return '#409EFF'; // 进行中
-              return '#67C23A'; // 已完成
+      } catch (error) {
+        console.error('获取课程进度数据出错:', error);
+        // 使用当前课程数据作为备选
+      }
+      
+      const option = {
+        title: {
+          text: '课程进度概览',
+          left: 'center'
+        },
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: {
+            type: 'shadow'
+          }
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '3%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'value',
+          max: 100,
+          name: '完成百分比'
+        },
+        yAxis: {
+          type: 'category',
+          data: chartData.map(course => course.name),
+          axisLabel: {
+            width: 120,
+            overflow: 'truncate'
+          }
+        },
+        series: [
+          {
+            name: '课程进度',
+            type: 'bar',
+            data: chartData.map(course => course.progress),
+            itemStyle: {
+              color: function(params) {
+                // 根据进度设置不同颜色
+                const progress = params.value;
+                if (progress === 0) return '#909399'; // 未开始
+                if (progress < 50) return '#E6A23C'; // 刚开始
+                if (progress < 100) return '#409EFF'; // 进行中
+                return '#67C23A'; // 已完成
+              }
             }
           }
-        }
-      ]
-    };
-    
-    progressChart.setOption(option);
-    window.addEventListener('resize', progressChart.resize);
+        ]
+      };
+      
+      progressChart.setOption(option);
+      window.addEventListener('resize', progressChart.resize);
+    } catch (error) {
+      console.error('初始化课程进度图表出错:', error);
+    }
   }
 };
 
 // 初始化学科分布图表
-const initSubjectChart = () => {
+const initSubjectChart = async () => {
   if (subjectChartRef.value) {
-    subjectChart = echarts.init(subjectChartRef.value);
-    
-    // 统计各学科课程数量
-    const subjectCount = {};
-    courses.value.forEach(course => {
-      if (subjectCount[course.subject]) {
-        subjectCount[course.subject]++;
-      } else {
-        subjectCount[course.subject] = 1;
+    try {
+      // 清除旧图表实例
+      if (subjectChart) {
+        subjectChart.dispose();
       }
-    });
-    
-    const option = {
-      title: {
-        text: '课程学科分布',
-        left: 'center'
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: '{a} <br/>{b}: {c} ({d}%)'
-      },
-      legend: {
-        orient: 'vertical',
-        left: 'left',
-        data: Object.keys(subjectCount)
-      },
-      series: [
-        {
-          name: '学科分布',
-          type: 'pie',
-          radius: '50%',
-          data: Object.keys(subjectCount).map(key => ({
-            name: key,
-            value: subjectCount[key]
-          })),
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
+      
+      subjectChart = echarts.init(subjectChartRef.value);
+      
+      // 获取学科分布数据
+      let subjectData = {};
+      try {
+        const response = await courseService.getSubjectDistribution();
+        if (response.code === 200) {
+          subjectData = response.data;
+        } else {
+          // 使用当前课程数据统计
+          courses.value.forEach(course => {
+            if (subjectData[course.subject]) {
+              subjectData[course.subject]++;
+            } else {
+              subjectData[course.subject] = 1;
+            }
+          });
+        }
+      } catch (error) {
+        console.error('获取学科分布数据出错:', error);
+        // 使用当前课程数据统计
+        courses.value.forEach(course => {
+          if (subjectData[course.subject]) {
+            subjectData[course.subject]++;
+          } else {
+            subjectData[course.subject] = 1;
+          }
+        });
+      }
+      
+      const option = {
+        title: {
+          text: '课程学科分布',
+          left: 'center'
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          data: Object.keys(subjectData)
+        },
+        series: [
+          {
+            name: '学科分布',
+            type: 'pie',
+            radius: '50%',
+            data: Object.keys(subjectData).map(key => ({
+              name: key,
+              value: subjectData[key]
+            })),
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)'
+              }
             }
           }
-        }
-      ]
-    };
-    
-    subjectChart.setOption(option);
-    window.addEventListener('resize', subjectChart.resize);
+        ]
+      };
+      
+      subjectChart.setOption(option);
+      window.addEventListener('resize', subjectChart.resize);
+    } catch (error) {
+      console.error('初始化学科分布图表出错:', error);
+    }
   }
 };
 
 // 初始化学习进度趋势图表
-const initProgressTrendChart = () => {
+const initProgressTrendChart = async () => {
   if (progressTrendChartRef.value) {
-    progressTrendChart = echarts.init(progressTrendChartRef.value);
-    
-    // 模拟时间数据（可以根据实际需求调整）
-    const dates = ['1月', '2月', '3月', '4月', '5月', '6月'];
-    
-    // 为每个课程生成模拟的进度趋势数据
-    const seriesData = courses.value.map(course => {
-      // 生成模拟的进度数据，从0开始逐渐增加到当前进度
-      const progressData = [];
-      const currentProgress = course.progress;
-      for (let i = 0; i < dates.length; i++) {
-        // 生成一个从0到当前进度的渐进数列
-        const progress = Math.min(Math.round(currentProgress * (i + 1) / dates.length), currentProgress);
-        progressData.push(progress);
+    try {
+      // 清除旧图表实例
+      if (progressTrendChart) {
+        progressTrendChart.dispose();
       }
       
-      return {
-        name: course.name,
-        type: 'line',
-        data: progressData,
-        smooth: true
+      progressTrendChart = echarts.init(progressTrendChartRef.value);
+      
+      // 获取进度趋势数据
+      let trendData = {
+        dates: ['1月', '2月', '3月', '4月', '5月', '6月'],
+        series: []
       };
-    });
-    
-    const option = {
-      title: {
-        text: '学习进度趋势',
-        left: 'center'
-      },
-      tooltip: {
-        trigger: 'axis'
-      },
-      legend: {
-        data: courses.value.map(course => course.name),
-        type: 'scroll',
-        orient: 'horizontal',
-        bottom: 0
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '15%',
-        containLabel: true
-      },
-      xAxis: {
-        type: 'category',
-        boundaryGap: false,
-        data: dates
-      },
-      yAxis: {
-        type: 'value',
-        max: 100,
-        name: '完成百分比'
-      },
-      series: seriesData
-    };
-    
-    progressTrendChart.setOption(option);
-    window.addEventListener('resize', progressTrendChart.resize);
+      
+      try {
+        const response = await courseService.getProgressTrend();
+        if (response.code === 200) {
+          trendData = response.data;
+        } else {
+          // 使用当前课程数据生成模拟趋势
+          trendData.series = courses.value.map(course => {
+            const progressData = [];
+            const currentProgress = course.progress;
+            for (let i = 0; i < trendData.dates.length; i++) {
+              const progress = Math.min(Math.round(currentProgress * (i + 1) / trendData.dates.length), currentProgress);
+              progressData.push(progress);
+            }
+            
+            return {
+              name: course.name,
+              type: 'line',
+              data: progressData,
+              smooth: true
+            };
+          });
+        }
+      } catch (error) {
+        console.error('获取进度趋势数据出错:', error);
+        // 使用当前课程数据生成模拟趋势
+        trendData.series = courses.value.map(course => {
+          const progressData = [];
+          const currentProgress = course.progress;
+          for (let i = 0; i < trendData.dates.length; i++) {
+            const progress = Math.min(Math.round(currentProgress * (i + 1) / trendData.dates.length), currentProgress);
+            progressData.push(progress);
+          }
+          
+          return {
+            name: course.name,
+            type: 'line',
+            data: progressData,
+            smooth: true
+          };
+        });
+      }
+      
+      const option = {
+        title: {
+          text: '学习进度趋势',
+          left: 'center'
+        },
+        tooltip: {
+          trigger: 'axis'
+        },
+        legend: {
+          data: trendData.series.map(item => item.name),
+          type: 'scroll',
+          orient: 'horizontal',
+          bottom: 0
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '15%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: trendData.dates
+        },
+        yAxis: {
+          type: 'value',
+          max: 100,
+          name: '完成百分比'
+        },
+        series: trendData.series
+      };
+      
+      progressTrendChart.setOption(option);
+      window.addEventListener('resize', progressTrendChart.resize);
+    } catch (error) {
+      console.error('初始化进度趋势图表出错:', error);
+    }
   }
 };
 
 // 监听标签页变化，初始化图表
 const handleTabChange = (tab) => {
   if (tab === 'courseAnalysis') {
-    // 使用nextTick确保DOM已更新
-    setTimeout(() => {
-      initProgressChart();
-      initSubjectChart();
-      initProgressTrendChart();
-    }, 100);
+    initCharts();
   }
 };
 
 // 组件挂载时初始化
-onMounted(() => {
+onMounted(async () => {
+  // 获取课程列表
+  await fetchCourses();
+  
   if (activeTab.value === 'courseAnalysis') {
-    setTimeout(() => {
-      initProgressChart();
-      initSubjectChart();
-      initProgressTrendChart();
-    }, 100);
+    initCharts();
   }
 });
 </script>
@@ -418,7 +541,7 @@ onMounted(() => {
           </el-button>
         </div>
         
-        <el-table :data="courses" style="width: 100%">
+        <el-table :data="courses" style="width: 100%" v-loading="loading">
           <el-table-column prop="name" label="课程名称" />
           <el-table-column prop="subject" label="学科" width="100" />
           <el-table-column prop="grade" label="年级" width="100" />
@@ -446,13 +569,17 @@ onMounted(() => {
             </template>
           </el-table-column>
         </el-table>
+        
+        <el-empty v-if="!loading && courses.length === 0" description="暂无课程数据" />
       </el-tab-pane>
       
       <el-tab-pane name="courseAnalysis" label="课程分析">
-        <div class="chart-container">
+        <el-empty v-if="!loading && courses.length === 0" description="暂无课程数据，无法生成分析图表" />
+        
+        <div v-else class="chart-container">
           <el-row :gutter="20">
             <el-col :span="24">
-              <el-card class="chart-card">
+              <el-card class="chart-card" v-loading="loading">
                 <div ref="progressChartRef" class="chart"></div>
               </el-card>
             </el-col>
@@ -460,13 +587,13 @@ onMounted(() => {
           
           <el-row :gutter="20" style="margin-top: 20px;">
             <el-col :span="12">
-              <el-card class="chart-card">
+              <el-card class="chart-card" v-loading="loading">
                 <div ref="subjectChartRef" class="chart"></div>
               </el-card>
             </el-col>
             
             <el-col :span="12">
-              <el-card class="chart-card">
+              <el-card class="chart-card" v-loading="loading">
                 <h3>课程状态统计</h3>
                 <el-table :data="[{
                   status: '未开始',
@@ -494,7 +621,7 @@ onMounted(() => {
           
           <el-row :gutter="20" style="margin-top: 20px;">
             <el-col :span="24">
-              <el-card class="chart-card">
+              <el-card class="chart-card" v-loading="loading">
                 <div ref="progressTrendChartRef" class="chart"></div>
               </el-card>
             </el-col>

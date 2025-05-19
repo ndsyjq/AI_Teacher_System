@@ -63,7 +63,6 @@ const checkLoginStatus = async () => {
     loading.value = false;
   }
 };
-
 // Toggle between login and registration forms
 const toggleRegister = () => {
   showRegister.value = !showRegister.value;
@@ -87,7 +86,7 @@ const handleLogin = async () => {
     const response = await userService.login(loginForm.username, loginForm.password);
     if (response.code === 200) {
       // 保存token
-      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('token', response.data);
       isLoggedIn.value = true;
       ElMessage.success('登录成功');
     } else {

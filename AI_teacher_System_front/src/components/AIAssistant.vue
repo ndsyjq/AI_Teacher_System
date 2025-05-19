@@ -42,17 +42,6 @@
 import { ref } from 'vue';
 import {aiAssistantService} from '@/services/';
 
-// 清理AI回复内容，移除</think>标签前的内容
-const cleanAIResponse = (content) => {
-  if (typeof content !== 'string') return content;
-  
-  const thinkTagIndex = content.indexOf('</think>');
-  if (thinkTagIndex !== -1) {
-    return content.substring(thinkTagIndex + 8).trim(); // 8是</think>的长度
-  }
-  return content;
-};
-
 // 聊天消息记录
 const messages = ref([
   {
@@ -67,9 +56,9 @@ const userInput = ref('');
 // 发送消息
   const sendMessage = async () => {
     if (!userInput.value.trim()) return;
-    
+
     const userMessage = userInput.value;
-    
+
     // 添加用户消息
     messages.value.push({
       type: 'user',
@@ -78,25 +67,56 @@ const userInput = ref('');
 
     // 清空输入框
     userInput.value = '';
-    
+
     // 添加一个临时的AI消息，表示正在思考
     messages.value.push({
       type: 'ai',
       content: '思考中...',
       isLoading: true
     });
-    
+
     try {
       // 发送消息到后端并获取回复
       const response = await aiAssistantService.sendMessage(userMessage);
-      
-      // 更新最后一条AI消息
-      const lastIndex = messages.value.length - 1;
-      messages.value[lastIndex] = {
-        type: 'ai',
-        content: cleanAIResponse(response.data) || '抱歉，我暂时无法回答这个问题。',
-        isLoading: false
+      // 清理AI回复内容，移除</think>标签前的内容
+      const cleanAIResponse = (content) => {
+        if (typeof content !== 'string') return content;
+
+        // 尝试解析JSON格式内容
+        try {
+          const parsedContent = JSON.parse(content);
+          if (typeof parsedContent === 'object' && parsedContent.text) {
+            content = parsedContent.text;
+          }
+        } catch (e) {
+          // 非JSON格式，不处理
+        }
+
+        const thinkTagIndex = content.indexOf('\u0192');
+        if (thinkTagIndex !== -1) {
+          return content.substring(thinkTagIndex + 1).trim(); // 8是\u0192的长度
+        }
+        return content;
       };
+      if (response.data && response.data.data && typeof response.data.content === 'string') {
+        const aiContent = cleanAIResponse(response.data.data.content);
+        debugger;
+        // 更新最后一条AI消息
+        const lastIndex = messages.value.length - 1;
+        messages.value[lastIndex] = {
+          type: 'ai',
+          content: aiContent,
+          isLoading: false
+        };
+      } else {
+        // 处理异常情况
+        const lastIndex = messages.value.length - 1;
+        messages.value[lastIndex] = {
+          type: 'ai',
+          content: '抱歉，我暂时无法回答这个问题。',
+          isLoading: false
+        };
+      }
     } catch (error) {
       // 处理错误情况
       const lastIndex = messages.value.length - 1;
@@ -107,9 +127,7 @@ const userInput = ref('');
       };
       console.error('AI助手请求错误:', error);
     }
-  
-  // 已在上面清空输入框
-};
+  }
 </script>
 
 <style scoped>

@@ -2,8 +2,10 @@
 import { ref, reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import { userService } from '../services';
+import {InfoFilled} from "@element-plus/icons-vue";
 
 const passwordForm = reactive({
+  username:'',
   currentPassword: '',
   newPassword: '',
   confirmPassword: ''
@@ -43,10 +45,13 @@ const submitForm = async () => {
   await formRef.value.validate(async (valid) => {
     if (valid) {
       try {
+        const response1=await userService.getUserInfo();
+        const name= response1.data.username;
         loading.value = true;
         const passwordData = {
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword
+          username:name,
+          password: passwordForm.currentPassword,
+          new_password: passwordForm.newPassword
         };
         
         const response = await userService.changePassword(passwordData);

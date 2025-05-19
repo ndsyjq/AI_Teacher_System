@@ -2,6 +2,8 @@
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { userService } from '../services';
+import {Plus} from "@element-plus/icons-vue";
+import {cleanupImageUrl, handleFileStream} from "@/services/fileUtils.js";
 
 const userForm = reactive({
   username: '',
@@ -12,9 +14,41 @@ const userForm = reactive({
   position: '',
   avatar: ''
 });
-
 // 加载中状态
 const loading = ref(false);
+// 从文件流获取头像
+const avatarLoaded = ref(false);
+const fetchAvatarByStream = async (avatarPath) => {
+  if (!avatarPath) return;
+
+  try {
+    avatarLoaded.value = false;
+    // 调用文件流处理方法
+    const streamUrl = await handleFileStream(avatarPath, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      onError: (error) => {
+        console.error('加载头像失败:', error);
+        ElMessage.error('加载头像失败，请稍后再试');
+      }
+    });
+
+    if (streamUrl) {
+      // 清理之前的URL（如果有）
+      if (avatarUrl.value && avatarUrl.value.startsWith('blob:')) {
+        cleanupImageUrl(avatarUrl.value);
+      }
+
+      avatarUrl.value = streamUrl;
+    }
+  } catch (error) {
+    console.error('处理头像文件流时出错:', error);
+    ElMessage.error('加载头像失败，请稍后再试');
+  } finally {
+    avatarLoaded.value = true;
+  }
+};
 
 // 获取用户信息
 const fetchUserInfo = async () => {
@@ -24,7 +58,9 @@ const fetchUserInfo = async () => {
     if (response.code === 200) {
       Object.assign(userForm, response.data);
       if (response.data.avatar) {
-        avatarUrl.value = response.data.avatar;
+        debugger
+        await fetchAvatarByStream(response.data.avatar);
+        debugger
       }
       ElMessage.success('用户信息加载成功');
     } else {
@@ -42,17 +78,26 @@ const fetchUserInfo = async () => {
 onMounted(() => {
   fetchUserInfo();
 });
-
+const token=localStorage.getItem('token');
 const avatarUrl = ref('');
 
-const handleAvatarSuccess = (response) => {
+const handleAvatarSuccess = async(response) => {
   if (response.code === 200) {
-    avatarUrl.value = response.data.url;
-    userForm.avatar = response.data.url;
-    ElMessage.success('头像上传成功');
+    avatarUrl.value = response.data;
+    userForm.avatar = response.data;
+    // 修改为传递对象，确保参数名为avatarUrl
+    const result = await userService.uploadAvatar({avatar:response.data,
+    username: userForm.username});
+    if (result.code === 200) {
+      ElMessage.success('头像更新成功');
+      await fetchAvatarByStream(response.data);
+    } else {
+      ElMessage.error(result.message || '更新头像失败');
+    }
   } else {
-    ElMessage.error(response.message || '头像上传失败');
+    ElMessage.error(response.message || '传递头像URL失败');
   }
+
 };
 
 const beforeAvatarUpload = (file) => {
@@ -100,12 +145,14 @@ const saveProfile = async () => {
             <div class="avatar-container">
               <el-upload
                 class="avatar-uploader"
-                action="/api/upload"
+                action="/api/file/upload"
+                name="file"
+                :headers="{'Authorization':`Bearer ${token}`}"
                 :show-file-list="false"
                 :on-success="handleAvatarSuccess"
                 :before-upload="beforeAvatarUpload"
               >
-                <img v-if="avatarUrl" :src="avatarUrl" class="avatar" />
+                <img v-if="avatarUrl" :src="avatarUrl" class="avatar"  alt=""/>
                 <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
               </el-upload>
               <p class="avatar-tip">点击上传头像</p>
