@@ -11,6 +11,16 @@ import UserProfile from './components/UserProfile.vue';
 import PasswordChange from './components/PasswordChange.vue';
 import SystemSettings from './components/SystemSettings.vue';
 import { userService } from './services';
+import {
+  ArrowDown,
+  ChatDotRound,
+  Collection,
+  DataBoard,
+  Document, Lock, Message,
+  Phone,
+  Reading,
+  Setting, User, UserFilled
+} from "@element-plus/icons-vue";
 
 // Login and registration form data and methods
 const loginForm = reactive({
@@ -86,6 +96,7 @@ const handleLogin = async () => {
     const response = await userService.login(loginForm.username, loginForm.password);
     if (response.code === 200) {
       // 保存token
+      localStorage.setItem('userName',loginForm.username);
       localStorage.setItem('token', response.data);
       isLoggedIn.value = true;
       ElMessage.success('登录成功');
@@ -159,7 +170,6 @@ const handleRegister = async () => {
 const handleLogout = async () => {
   try {
     loading.value = true;
-    await userService.logout();
     // 无论成功与否，都清除本地token并退出登录
     localStorage.removeItem('token');
     isLoggedIn.value = false;
@@ -368,7 +378,6 @@ html, body {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  overflow-x:hidden;
 }
 
 #app {

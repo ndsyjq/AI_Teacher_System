@@ -4,7 +4,6 @@ import * as echarts from 'echarts';
 import { ElMessage, ElLoading } from 'element-plus';
 import { courseService } from '../services';
 // 引入echarts，需要先安装：npm install echarts --save
-
 // 课程表单数据
 const courseForm = reactive({
   name: '',
@@ -37,8 +36,6 @@ const fetchCourses = async () => {
     loading.value = false;
   }
 };
-
-
 // 当前激活的标签页
 const activeTab = ref('myCourses');
 
@@ -80,8 +77,8 @@ const addCourse = async () => {
       semester: courseForm.semester,
       description: courseForm.description
     };
-    
-    const response = await courseService.addCourse(courseData);
+    const userName = localStorage.getItem('userName');
+    const response = await courseService.addCourse(courseData,userName);
     if (response.code === 200) {
       ElMessage.success('添加课程成功');
       // 重新获取课程列表

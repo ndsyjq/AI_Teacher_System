@@ -24,6 +24,7 @@ const fetchAvatarByStream = async (avatarPath) => {
   try {
     avatarLoaded.value = false;
     // 调用文件流处理方法
+    debugger
     const streamUrl = await handleFileStream(avatarPath, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -63,6 +64,7 @@ const fetchUserInfo = async () => {
         debugger
       }
       ElMessage.success('用户信息加载成功');
+
     } else {
       ElMessage.error(response.message || '加载用户信息失败');
     }
