@@ -89,7 +89,7 @@ const handleAvatarSuccess = async(response) => {
     userForm.avatar = response.data;
     // 修改为传递对象，确保参数名为avatarUrl
     const result = await userService.uploadAvatar({avatar:response.data,
-    username: userForm.username});
+      username: userForm.username});
     if (result.code === 200) {
       ElMessage.success('头像更新成功');
       await fetchAvatarByStream(response.data);
@@ -146,13 +146,13 @@ const saveProfile = async () => {
           <el-col :span="8">
             <div class="avatar-container">
               <el-upload
-                class="avatar-uploader"
-                action="/api/file/upload"
-                name="file"
-                :headers="{'Authorization':`Bearer ${token}`}"
-                :show-file-list="false"
-                :on-success="handleAvatarSuccess"
-                :before-upload="beforeAvatarUpload"
+                  class="avatar-uploader"
+                  action="/api/file/upload"
+                  name="file"
+                  :headers="{'Authorization':`Bearer ${token}`}"
+                  :show-file-list="false"
+                  :on-success="handleAvatarSuccess"
+                  :before-upload="beforeAvatarUpload"
               >
                 <img v-if="avatarUrl" :src="avatarUrl" class="avatar"  alt=""/>
                 <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
