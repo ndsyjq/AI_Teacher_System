@@ -14,9 +14,13 @@
                 :icon="message.type === 'user' ? 'UserFilled' : 'Service'"
                 :class="message.type === 'user' ? 'user-avatar' : 'ai-avatar'"
               />
-              <div class="message-content" :class="message.type === 'user' ? 'user-content' : 'ai-content'">
-                {{ message.content }}
+              <div
+                  class="message-content"
+                  :class="message.type === 'user' ? 'user-content' : 'ai-content'"
+                  style="white-space: pre-line;">
+                  {{ message.content }}
               </div>
+
             </div>
           </div>
           <div class="ai-chat-input">
@@ -56,51 +60,28 @@ const userInput = ref('');
 // 发送消息
   const sendMessage = async () => {
     if (!userInput.value.trim()) return;
-
     const userMessage = userInput.value;
-
     // 添加用户消息
     messages.value.push({
       type: 'user',
       content: userMessage
     });
-
     // 清空输入框
     userInput.value = '';
-
     // 添加一个临时的AI消息，表示正在思考
     messages.value.push({
       type: 'ai',
       content: '思考中...',
       isLoading: true
     });
-
     try {
       // 发送消息到后端并获取回复
       const response = await aiAssistantService.sendMessage(userMessage);
       // 清理AI回复内容，移除</think>标签前的内容
-      const cleanAIResponse = (content) => {
-        if (typeof content !== 'string') return content;
 
-        // 尝试解析JSON格式内容
-        try {
-          const parsedContent = JSON.parse(content);
-          if (typeof parsedContent === 'object' && parsedContent.text) {
-            content = parsedContent.text;
-          }
-        } catch (e) {
-          // 非JSON格式，不处理
-        }
+      if (response.data  && typeof response.data === 'string') {
+        const aiContent = response.data;
 
-        const thinkTagIndex = content.indexOf('\u0192');
-        if (thinkTagIndex !== -1) {
-          return content.substring(thinkTagIndex + 1).trim(); // 8是\u0192的长度
-        }
-        return content;
-      };
-      if (response.data && response.data.data && typeof response.data.content === 'string') {
-        const aiContent = cleanAIResponse(response.data.data.content);
-        debugger;
         // 更新最后一条AI消息
         const lastIndex = messages.value.length - 1;
         messages.value[lastIndex] = {

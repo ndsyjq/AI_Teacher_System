@@ -3,7 +3,7 @@ import axios from 'axios';
 // 创建axios实例
 const api = axios.create({
   baseURL: '',  // 移除'/api'前缀，避免与Vite代理路径重复
-  timeout: 10000,
+  timeout: 1000000,
   headers: {
     'Content-Type': 'application/json'
   }
