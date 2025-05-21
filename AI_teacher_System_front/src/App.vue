@@ -328,10 +328,6 @@ emitter.on('change-menu', (menu) => {
           <el-icon><Collection /></el-icon>
           <span>资源库</span>
         </el-menu-item>
-        <el-menu-item index="settings">
-          <el-icon><Setting /></el-icon>
-          <span>系统设置</span>
-        </el-menu-item>
       </el-menu>
     </el-aside>
 

@@ -1,12 +1,11 @@
 import api from './api';
 
 // 课程管理服务
-const courseService = {
+export const courseService = {
   // 添加课程
   addCourse(courseData,userName) {
     return api.post(`/api/courses/add?username=${userName}`, courseData);
   },
-  
   // 获取课程列表
   getCourses() {
     return api.get('/api/courses/selectAll');
@@ -14,17 +13,17 @@ const courseService = {
   
   // 获取课程详情
   getCourseDetail(courseId) {
-    return api.get(`/api/courses/select${courseId}`);
+    return api.get(`/api/courses/select?id=${courseId}`);
   },
   
   // 编辑课程
-  updateCourse(courseId, courseData) {
-    return api.put(`/api/courses/${courseId}`, courseData);
+  updateCourse( courseData) {
+    return api.put(`/api/courses/update`, courseData);
   },
   
   // 删除课程
   deleteCourse(courseId) {
-    return api.delete(`/api/courses/delete?name=${courseId}`);
+    return api.delete(`/api/courses/delete?id=${courseId}`);
   },
   // 获取课程进度概览数据
   getProgressOverview() {
@@ -40,4 +39,3 @@ const courseService = {
   }
 };
 
-export default courseService;

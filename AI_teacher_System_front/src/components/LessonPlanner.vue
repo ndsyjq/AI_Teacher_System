@@ -1,46 +1,30 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import * as echarts from 'echarts';
+import {ElMessage, ElLoading, ElMessageBox} from 'element-plus';
+import {courseService} from '@/services/courseService';
+import {lessonService} from "@/services/index.js";
 // 引入echarts，需要先安装：npm install echarts --save
 
 // 备课表单数据
 const lessonForm = reactive({
+  id: '',
+  username: localStorage.getItem('userName'),
   name: '',
   chapter: '',
   objectives: '',
-  content: ''
+  content: '',
+  courseId:''
 });
 
-// 模拟备课数据
-const lessonPlans = ref([
-  {
-    id: 1,
-    name: '高中数学必修一',
-    chapter: '第一章 集合与函数概念',
-    status: '已完成',
-    date: '2023-06-01',
-    objectives: '1. 理解集合的基本概念\n2. 掌握集合的运算\n3. 理解函数的概念',
-    content: '本节课主要讲解集合的基本概念和函数的定义。\n\n一、教学重点：\n1. 集合的表示方法\n2. 函数的定义域和值域\n\n二、教学难点：\n1. 集合之间的关系\n2. 函数的性质'
-  },
-  {
-    id: 2,
-    name: '高中物理必修二',
-    chapter: '第三章 牛顿运动定律',
-    status: '进行中',
-    date: '2023-06-05',
-    objectives: '1. 理解牛顿三大定律\n2. 掌握力学问题的分析方法',
-    content: '本节课主要讲解牛顿三大定律及其应用。\n\n一、教学重点：\n1. 牛顿第二定律的应用\n2. 摩擦力的计算\n\n二、教学难点：\n1. 复杂力学系统的分析\n2. 多物体问题的处理'
-  },
-  {
-    id: 3,
-    name: '高中语文必修三',
-    chapter: '第二单元 小说阅读',
-    status: '未开始',
-    date: '2023-06-10',
-    objectives: '',
-    content: ''
-  }
-]);
+// 备课数据
+const lessonPlans = ref([]);
+
+// 加载状态
+const loading = ref(false);
+
+// 错误信息
+const errorMessage = ref('');
 
 // 当前激活的标签页
 const activeTab = ref('myLessons');
@@ -67,43 +51,80 @@ const editForm = reactive({
 });
 
 // 保存备课
-const saveLessonPlan = () => {
+const saveLessonPlan = async () => {
   if (!lessonForm.name || !lessonForm.chapter) {
-    // 这里应该有表单验证
+    ElMessage.warning('请填写课程名称和章节');
     return;
   }
   
-  // 模拟保存操作
-  lessonPlans.value.push({
-    id: lessonPlans.value.length + 1,
-    name: lessonForm.name,
-    chapter: lessonForm.chapter,
-    objectives: lessonForm.objectives,
-    content: lessonForm.content,
-    status: '未开始',
-    date: new Date().toISOString().split('T')[0]
+  const loadingInstance = ElLoading.service({
+    text: '正在保存课程...',
+    background: 'rgba(0, 0, 0, 0.7)'
   });
   
-  // 重置表单
-  lessonForm.name = '';
-  lessonForm.chapter = '';
-  lessonForm.objectives = '';
-  lessonForm.content = '';
-  
-  // 切换到我的备课标签
-  activeTab.value = 'myLessons';
+  try {
+    // 假设当前用户名为从状态管理获取，这里示例使用固定值
+    const userName = localStorage.getItem('userName');
+    // 调用API保存课程
+    await lessonService.saveLessonPlan(lessonForm,userName);
+    
+    // 重置表单
+    lessonForm.name = '';
+    lessonForm.chapter = '';
+    lessonForm.objectives = '';
+    lessonForm.content = '';
+    
+    // 切换到我的课程标签并刷新列表
+    activeTab.value = 'myLessons';
+    await fetchLessonPlans();
+    
+    ElMessage.success('课程保存成功');
+  } catch (error) {
+    console.error('保存课程失败:', error);
+    ElMessage.error('保存课程失败: ' + (error.message || '未知错误'));
+  } finally {
+    loadingInstance.close();
+  }
 };
 
 // AI智能生成备课内容
-const generateAIContent = () => {
+const generateAIContent = async () => {
   if (!lessonForm.name || !lessonForm.chapter) {
-    // 这里应该有表单验证
+    ElMessage.warning('请填写课程名称和章节');
     return;
   }
   
-  // 模拟AI生成内容
-  lessonForm.objectives = '1. 理解' + lessonForm.name + '中' + lessonForm.chapter + '的基本概念\n2. 掌握相关知识点的应用\n3. 能够解决相关的基础问题';
-  lessonForm.content = '本节课主要讲解' + lessonForm.name + '中' + lessonForm.chapter + '的核心内容。\n\n一、教学重点：\n1. 基本概念的理解\n2. 典型例题分析\n\n二、教学难点：\n1. 知识点的融会贯通\n2. 解题思路的形成';
+  const loadingInstance = ElLoading.service({
+    text: 'AI正在生成备课内容...',
+    background: 'rgba(0, 0, 0, 0.7)'
+  });
+  
+  try {
+    // 准备备课数据
+    const lessonData = {
+      name: lessonForm.name,
+      chapter: lessonForm.chapter
+    };
+    
+    // 调用API生成AI内容
+    const response = await lessonService.generateAIContent(lessonData);
+    
+    // 更新表单数据
+    lessonForm.objectives = response.data.objectives || '';
+    lessonForm.content = response.data.content || '';
+    
+    ElMessage.success('AI内容生成成功');
+  } catch (error) {
+    console.error('AI内容生成失败:', error);
+    ElMessage.error('AI内容生成失败: ' + (error.message || '未知错误'));
+    
+    // 如果API调用失败，使用本地模拟数据（作为备选方案）
+    lessonForm.objectives = '1. 理解' + lessonForm.name + '中' + lessonForm.chapter + '的基本概念\n2. 掌握相关知识点的应用\n3. 能够解决相关的基础问题';
+    lessonForm.content = '本节课主要讲解' + lessonForm.name + '中' + lessonForm.chapter + '的核心内容。\n\n一、教学重点：\n1. 基本概念的理解\n2. 典型例题分析\n\n二、教学难点：\n1. 知识点的融会贯通\n2. 解题思路的形成';
+  } finally {
+    loadingInstance.close();
+  }
+
 };
 
 // 打开编辑对话框
@@ -121,41 +142,53 @@ const openEditDialog = (lesson) => {
 };
 
 // 保存编辑的备课
-const saveEditedLesson = () => {
+const saveEditedLesson = async () => {
   if (!editForm.name || !editForm.chapter) {
-    // 表单验证
+    ElMessage.warning('请填写课程名称和章节');
     return;
   }
   
-  // 更新备课数据
-  if (currentLesson.value) {
-    const index = lessonPlans.value.findIndex(plan => plan.id === currentLesson.value.id);
-    if (index !== -1) {
-      // 更新备课
-      lessonPlans.value[index] = {
-        ...lessonPlans.value[index],
+  const loadingInstance = ElLoading.service({
+    text: '正在更新课程...',
+    background: 'rgba(0, 0, 0, 0.7)'
+  });
+  debugger
+  try {
+    // 更新课程数据
+    if (currentLesson.value) {
+      // 准备更新的数据
+      const lessonData = {
+        id: currentLesson.value.id,
+        username: localStorage.getItem('userName'),
+        courseId: currentLesson.value.courseId,
         name: editForm.name,
         chapter: editForm.chapter,
         objectives: editForm.objectives,
         content: editForm.content,
         status: editForm.status
       };
-      
+      debugger
+      // 调用API更新课程
+      await lessonService.updateLessonPlan(lessonData);
+      debugger
       // 关闭对话框
       editDialogVisible.value = false;
       
-      // 如果在分析页面，需要重新初始化图表
-      if (activeTab.value === 'lessonAnalysis') {
-        setTimeout(() => {
-          initStatusChart();
-        }, 100);
-      }
+      // 刷新课程列表
+      fetchLessonPlans();
+      
+      ElMessage.success('课程更新成功');
     }
+  } catch (error) {
+    console.error('更新课程失败:', error);
+    ElMessage.error('更新课程失败: ' + (error.message || '未知错误'));
+  } finally {
+    loadingInstance.close();
   }
 };
 
 // 打开AI优化对话框
-const openAIOptimizeDialog = (lesson) => {
+const openAIOptimizeDialog = async (lesson) => {
   currentLesson.value = lesson;
   
   // 复制数据到编辑表单
@@ -167,9 +200,31 @@ const openAIOptimizeDialog = (lesson) => {
   // 显示AI优化对话框
   aiOptimizeDialogVisible.value = true;
   
-  // 模拟AI优化过程
-  setTimeout(() => {
-    // 模拟AI优化结果
+  const loadingInstance = ElLoading.service({
+    text: 'AI正在优化备课内容...',
+    background: 'rgba(0, 0, 0, 0.7)'
+  });
+  
+  try {
+    // 准备备课数据
+    const lessonData = {
+      objectives: editForm.objectives,
+      content: editForm.content
+    };
+    
+    // 调用API优化备课内容
+    const response = await lessonService.optimizeLessonPlan(lesson.id, lessonData);
+    
+    // 更新表单数据
+    editForm.objectives = response.data.objectives || editForm.objectives;
+    editForm.content = response.data.content || editForm.content;
+    
+    ElMessage.success('AI优化完成');
+  } catch (error) {
+    console.error('AI优化失败:', error);
+    ElMessage.error('AI优化失败: ' + (error.message || '未知错误'));
+    
+    // 如果API调用失败，使用本地模拟数据（作为备选方案）
     if (editForm.objectives) {
       editForm.objectives += '\n4. 培养学生的创新思维和解决问题的能力';
     } else {
@@ -181,108 +236,172 @@ const openAIOptimizeDialog = (lesson) => {
     } else {
       editForm.content = '本节课主要讲解' + lesson.name + '中' + lesson.chapter + '的核心内容。\n\n一、教学重点：\n1. 基本概念的理解\n2. 典型例题分析\n\n二、教学难点：\n1. 知识点的融会贯通\n2. 解题思路的形成\n\n三、教学方法：\n1. 启发式教学\n2. 小组讨论\n3. 案例分析';
     }
-  }, 1000);
+  } finally {
+    loadingInstance.close();
+  }
 };
 
 // 保存AI优化的备课
-const saveAIOptimizedLesson = () => {
+const saveAIOptimizedLesson = async () => {
   if (!editForm.name || !editForm.chapter) {
-    // 表单验证
+    ElMessage.warning('请填写课程名称和章节');
     return;
   }
   
-  // 更新备课数据
-  if (currentLesson.value) {
-    const index = lessonPlans.value.findIndex(plan => plan.id === currentLesson.value.id);
-    if (index !== -1) {
-      // 更新备课
-      lessonPlans.value[index] = {
-        ...lessonPlans.value[index],
+  const loadingInstance = ElLoading.service({
+    text: '正在保存优化内容...',
+    background: 'rgba(0, 0, 0, 0.7)'
+  });
+  
+  try {
+    // 更新备课数据
+    if (currentLesson.value) {
+      // 准备更新的数据
+      const lessonData = {
         objectives: editForm.objectives,
         content: editForm.content,
         status: '进行中' // AI优化后自动设为进行中
       };
       
+      // 调用API更新备课计划
+      await lessonService.updateLessonPlan(currentLesson.value.id, lessonData);
+      
       // 关闭对话框
       aiOptimizeDialogVisible.value = false;
       
-      // 如果在分析页面，需要重新初始化图表
-      if (activeTab.value === 'lessonAnalysis') {
-        setTimeout(() => {
-          initStatusChart();
-        }, 100);
-      }
+      // 刷新备课列表
+      fetchLessonPlans();
+      
+      ElMessage.success('AI优化内容已应用');
+    }
+  } catch (error) {
+    console.error('保存AI优化内容失败:', error);
+    ElMessage.error('保存AI优化内容失败: ' + (error.message || '未知错误'));
+  } finally {
+    loadingInstance.close();
+  }
+
+};
+
+// 删除课程
+const deleteCourse = async (lessonId) => {
+  try {
+    const confirm = await ElMessageBox.confirm('确定要删除该课程吗？', '提示', { type: 'warning' });
+    if (confirm === 'confirm') {
+      await lessonService.deleteLessonPlan(lessonId);
+      await fetchLessonPlans(); // 刷新课程列表
+      ElMessage.success('课程删除成功');
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除课程失败:', error);
+      ElMessage.error('删除课程失败，请稍后重试');
     }
   }
 };
 
 // 查看备课详情
-const viewLessonDetail = (lesson) => {
-  currentLesson.value = lesson;
-  detailDialogVisible.value = true;
+const viewLessonDetail = async (lesson) => {
+  const loadingInstance = ElLoading.service({
+    text: '正在加载备课详情...',
+    background: 'rgba(0, 0, 0, 0.7)'
+  });
+  
+  try {
+    // 调用API获取备课详情
+    const response = await lessonService.getLessonDetail(lesson.id);
+    currentLesson.value = response.data;
+    detailDialogVisible.value = true;
+  } catch (error) {
+    console.error('获取备课详情失败:', error);
+    ElMessage.error('获取备课详情失败: ' + (error.message || '未知错误'));
+    // 如果API调用失败，使用传入的lesson数据作为备选
+    currentLesson.value = lesson;
+    detailDialogVisible.value = true;
+  } finally {
+    loadingInstance.close();
+  }
 };
 
 // 初始化备课状态饼图
 const initStatusChart = () => {
-  if (statusChartRef.value) {
-    statusChart = echarts.init(statusChartRef.value);
-    
-    // 统计各状态备课数量
-    const statusCount = {
-      '已完成': lessonPlans.value.filter(plan => plan.status === '已完成').length,
-      '进行中': lessonPlans.value.filter(plan => plan.status === '进行中').length,
-      '未开始': lessonPlans.value.filter(plan => plan.status === '未开始').length
-    };
-    
-    const option = {
-      title: {
-        text: '备课状态分布',
-        left: 'center'
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: '{a} <br/>{b}: {c} ({d}%)'
-      },
-      legend: {
-        orient: 'vertical',
-        left: 'left',
-        data: Object.keys(statusCount)
-      },
-      series: [
-        {
-          name: '备课状态',
-          type: 'pie',
-          radius: '50%',
-          data: [
-            { 
-              value: statusCount['已完成'], 
-              name: '已完成',
-              itemStyle: { color: '#67C23A' }
-            },
-            { 
-              value: statusCount['进行中'], 
-              name: '进行中',
-              itemStyle: { color: '#E6A23C' }
-            },
-            { 
-              value: statusCount['未开始'], 
-              name: '未开始',
-              itemStyle: { color: '#909399' }
-            }
-          ],
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
-            }
+  if (!statusChartRef.value || loading.value || lessonPlans.value.length === 0) {
+    return;
+  }
+  
+  // 如果已经初始化过图表，先销毁
+  if (statusChart) {
+    statusChart.dispose();
+  }
+  
+  // 重新初始化图表
+  statusChart = echarts.init(statusChartRef.value);
+  
+  // 统计各状态备课数量
+  const statusCount = {
+    '已完成': lessonPlans.value.filter(plan => plan.status === '已完成').length,
+    '进行中': lessonPlans.value.filter(plan => plan.status === '进行中').length,
+    '未开始': lessonPlans.value.filter(plan => plan.status === '未开始').length
+  };
+  
+  const option = {
+    title: {
+      text: '备课状态分布',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: '{a} <br/>{b}: {c} ({d}%)'
+    },
+    legend: {
+      orient: 'vertical',
+      left: 'left',
+      data: Object.keys(statusCount)
+    },
+    series: [
+      {
+        name: '备课状态',
+        type: 'pie',
+        radius: '50%',
+        data: [
+          { 
+            value: statusCount['已完成'], 
+            name: '已完成',
+            itemStyle: { color: '#67C23A' }
+          },
+          { 
+            value: statusCount['进行中'], 
+            name: '进行中',
+            itemStyle: { color: '#E6A23C' }
+          },
+          { 
+            value: statusCount['未开始'], 
+            name: '未开始',
+            itemStyle: { color: '#909399' }
+          }
+        ],
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.5)'
           }
         }
-      ]
-    };
-    
-    statusChart.setOption(option);
-    window.addEventListener('resize', statusChart.resize);
+      }
+    ]
+  };
+  
+  statusChart.setOption(option);
+  
+  // 移除旧的事件监听器，避免重复添加
+  window.removeEventListener('resize', handleResize);
+  window.addEventListener('resize', handleResize);
+};
+
+// 处理窗口大小变化
+const handleResize = () => {
+  if (statusChart) {
+    statusChart.resize();
   }
 };
 
@@ -296,22 +415,55 @@ const handleTabChange = (tab) => {
   }
 };
 
+// 获取备课列表
+const fetchLessonPlans = async () => {
+  loading.value = true;
+  errorMessage.value = '';
+  
+  try {
+    const response = await lessonService.getLessonPlans();
+    lessonPlans.value = response.data;
+    
+    // 如果在分析页面，需要重新初始化图表
+    if (activeTab.value === 'lessonAnalysis') {
+      setTimeout(() => {
+        initStatusChart();
+      }, 100);
+    }
+  } catch (error) {
+    console.error('获取课程列表失败:', error);
+    errorMessage.value = '获取课程列表失败: ' + (error.message || '未知错误');
+    ElMessage.error(errorMessage.value);
+  } finally {
+    loading.value = false;
+  }
+};
+
 // 组件挂载时初始化
 onMounted(() => {
-  if (activeTab.value === 'lessonAnalysis') {
-    setTimeout(() => {
-      initStatusChart();
-    }, 100);
-  }
+  // 获取备课列表
+  fetchLessonPlans();
 });
 </script>
 
 <template>
   <div class="lesson-planner">
     <h2>备课中心</h2>
+    <el-alert
+      v-if="errorMessage"
+      :title="errorMessage"
+      type="error"
+      :closable="true"
+      @close="errorMessage = ''"
+      style="margin-bottom: 15px;"
+    />
     <el-tabs v-model="activeTab" type="border-card" @tab-change="handleTabChange">
       <el-tab-pane name="myLessons" label="我的备课">
-        <el-table :data="lessonPlans" style="width: 100%">
+        <div v-if="loading" class="loading-container">
+          <el-skeleton :rows="5" animated />
+        </div>
+        <el-empty v-else-if="lessonPlans.length === 0" description="暂无备课数据" />
+        <el-table v-else :data="lessonPlans" style="width: 100%">
           <el-table-column prop="name" label="课程名称" />
           <el-table-column prop="chapter" label="章节" />
           <el-table-column prop="status" label="状态">
@@ -329,6 +481,7 @@ onMounted(() => {
               <el-button size="small" @click="viewLessonDetail(scope.row)">查看</el-button>
               <el-button size="small" type="primary" @click="openEditDialog(scope.row)">编辑</el-button>
               <el-button size="small" type="success" @click="openAIOptimizeDialog(scope.row)">AI优化</el-button>
+<el-button size="small" type="danger" @click="deleteCourse(scope.row.id)">删除课程</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -370,7 +523,13 @@ onMounted(() => {
       </el-tab-pane>
       
       <el-tab-pane name="lessonAnalysis" label="备课分析">
-        <div class="chart-container">
+        <div v-if="loading" class="loading-container">
+          <el-skeleton :rows="3" animated />
+        </div>
+        <div v-else-if="lessonPlans.length === 0" class="empty-container">
+          <el-empty description="暂无备课数据，无法生成分析" />
+        </div>
+        <div v-else class="chart-container">
           <el-row :gutter="20">
             <el-col :span="12">
               <el-card class="chart-card">
@@ -570,5 +729,15 @@ pre {
 
 .lesson-detail {
   padding: 10px;
+}
+.loading-container {
+  padding: 20px;
+}
+
+.empty-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
 }
 </style>

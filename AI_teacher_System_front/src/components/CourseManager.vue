@@ -3,16 +3,17 @@ import { ref, reactive, onMounted } from 'vue';
 import * as echarts from 'echarts';
 import { ElMessage, ElLoading } from 'element-plus';
 import { courseService } from '../services';
+import {Plus} from "@element-plus/icons-vue";
 // 引入echarts，需要先安装：npm install echarts --save
 // 课程表单数据
 const courseForm = reactive({
+  id: '',
   name: '',
   subject: '',
   grade: '',
   semester: '',
   description: ''
 });
-
 // 课程数据
 const courses = ref([]);
 
@@ -136,7 +137,6 @@ const openEditDialog = async (courseId) => {
       courseForm.grade = currentCourse.value.grade;
       courseForm.semester = currentCourse.value.semester;
       courseForm.description = currentCourse.value.description || '';
-      
       // 打开编辑对话框
       editDialogVisible.value = true;
     } else {
@@ -161,6 +161,7 @@ const saveEditedCourse = async () => {
     try {
       loading.value = true;
       const courseData = {
+        id: currentCourse.value.id,
         name: courseForm.name,
         subject: courseForm.subject,
         grade: courseForm.grade,
@@ -168,7 +169,7 @@ const saveEditedCourse = async () => {
         description: courseForm.description
       };
       
-      const response = await courseService.updateCourse(currentCourse.value.id, courseData);
+      const response = await courseService.updateCourse( courseData);
       if (response.code === 200) {
         ElMessage.success('更新课程成功');
         // 重新获取课程列表
@@ -635,27 +636,16 @@ onMounted(async () => {
         </el-form-item>
         
         <el-form-item label="学科" required>
-          <el-select v-model="courseForm.subject" placeholder="请选择学科" style="width: 100%">
-            <el-option label="语文" value="语文" />
-            <el-option label="数学" value="数学" />
-            <el-option label="英语" value="英语" />
-            <el-option label="物理" value="物理" />
-            <el-option label="化学" value="化学" />
-            <el-option label="生物" value="生物" />
-            <el-option label="历史" value="历史" />
-            <el-option label="地理" value="地理" />
-            <el-option label="政治" value="政治" />
-          </el-select>
+          <el-input v-model="courseForm.subject" placeholder="请选择学科" style="width: 100%">
+          </el-input>
         </el-form-item>
         
         <el-form-item label="年级" required>
           <el-select v-model="courseForm.grade" placeholder="请选择年级" style="width: 100%">
-            <el-option label="初一" value="初一" />
-            <el-option label="初二" value="初二" />
-            <el-option label="初三" value="初三" />
-            <el-option label="高一" value="高一" />
-            <el-option label="高二" value="高二" />
-            <el-option label="高三" value="高三" />
+            <el-option label="大一" value="大一" />
+            <el-option label="大二" value="大二" />
+            <el-option label="大三" value="大三" />
+            <el-option label="大四" value="大四" />
           </el-select>
         </el-form-item>
         
