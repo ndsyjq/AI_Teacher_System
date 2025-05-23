@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import * as echarts from 'echarts';
-import { ElMessage, ElLoading } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { courseService } from '../services';
 import {Plus} from "@element-plus/icons-vue";
 // 引入echarts，需要先安装：npm install echarts --save
@@ -12,7 +12,8 @@ const courseForm = reactive({
   subject: '',
   grade: '',
   semester: '',
-  description: ''
+  description: '',
+  studentsCount:''
 });
 // 课程数据
 const courses = ref([]);
@@ -76,7 +77,8 @@ const addCourse = async () => {
       subject: courseForm.subject,
       grade: courseForm.grade,
       semester: courseForm.semester,
-      description: courseForm.description
+      description: courseForm.description,
+      studentsCount: courseForm.studentsCount
     };
     const userName = localStorage.getItem('userName');
     const response = await courseService.addCourse(courseData,userName);
@@ -132,6 +134,7 @@ const openEditDialog = async (courseId) => {
     if (response.code === 200) {
       currentCourse.value = response.data;
       // 将课程数据填充到表单中
+      courseForm.studentsCount = currentCourse.value.studentsCount;
       courseForm.name = currentCourse.value.name;
       courseForm.subject = currentCourse.value.subject;
       courseForm.grade = currentCourse.value.grade;
@@ -166,7 +169,8 @@ const saveEditedCourse = async () => {
         subject: courseForm.subject,
         grade: courseForm.grade,
         semester: courseForm.semester,
-        description: courseForm.description
+        description: courseForm.description,
+        studentsCount: courseForm.studentsCount
       };
       
       const response = await courseService.updateCourse( courseData);
@@ -184,7 +188,7 @@ const saveEditedCourse = async () => {
         courseForm.grade = '';
         courseForm.semester = '';
         courseForm.description = '';
-        
+        courseForm.studentsCount='';
         // 如果在分析页面，需要重新初始化图表
         if (activeTab.value === 'courseAnalysis') {
           initCharts();
@@ -544,12 +548,6 @@ onMounted(async () => {
           <el-table-column prop="subject" label="学科" width="100" />
           <el-table-column prop="grade" label="年级" width="100" />
           <el-table-column prop="semester" label="学期" width="100" />
-          <el-table-column prop="students" label="学生数" width="100" />
-          <el-table-column label="进度" width="180">
-            <template #default="scope">
-              <el-progress :percentage="scope.row.progress" />
-            </template>
-          </el-table-column>
           <el-table-column prop="status" label="状态" width="100">
             <template #default="scope">
               <el-tag 
@@ -655,7 +653,9 @@ onMounted(async () => {
             <el-option label="下学期" value="下学期" />
           </el-select>
         </el-form-item>
-        
+        <el-form-item label="学生人数" required>
+          <el-input v-model="courseForm.studentsCount" placeholder="请输入学生人数" />
+        </el-form-item>
         <el-form-item label="课程描述">
           <el-input 
             v-model="courseForm.description" 
@@ -682,10 +682,7 @@ onMounted(async () => {
           <el-descriptions-item label="学科">{{ currentCourse.subject }}</el-descriptions-item>
           <el-descriptions-item label="年级">{{ currentCourse.grade }}</el-descriptions-item>
           <el-descriptions-item label="学期">{{ currentCourse.semester }}</el-descriptions-item>
-          <el-descriptions-item label="学生数">{{ currentCourse.students }}</el-descriptions-item>
-          <el-descriptions-item label="进度">
-            <el-progress :percentage="currentCourse.progress" />
-          </el-descriptions-item>
+          <el-descriptions-item label="学生数">{{ currentCourse.studentsCount }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag 
               :type="currentCourse.status === '已完成' ? 'success' : currentCourse.status === '进行中' ? 'warning' : 'info'"
@@ -708,27 +705,16 @@ onMounted(async () => {
         </el-form-item>
         
         <el-form-item label="学科" required>
-          <el-select v-model="courseForm.subject" placeholder="请选择学科" style="width: 100%">
-            <el-option label="语文" value="语文" />
-            <el-option label="数学" value="数学" />
-            <el-option label="英语" value="英语" />
-            <el-option label="物理" value="物理" />
-            <el-option label="化学" value="化学" />
-            <el-option label="生物" value="生物" />
-            <el-option label="历史" value="历史" />
-            <el-option label="地理" value="地理" />
-            <el-option label="政治" value="政治" />
-          </el-select>
+          <el-input v-model="courseForm.subject" placeholder="请选择学科" style="width: 100%">
+          </el-input>
         </el-form-item>
         
-        <el-form-item label="年级" required>
+         <el-form-item label="年级" required>
           <el-select v-model="courseForm.grade" placeholder="请选择年级" style="width: 100%">
-            <el-option label="初一" value="初一" />
-            <el-option label="初二" value="初二" />
-            <el-option label="初三" value="初三" />
-            <el-option label="高一" value="高一" />
-            <el-option label="高二" value="高二" />
-            <el-option label="高三" value="高三" />
+            <el-option label="大一" value="大一" />
+            <el-option label="大二" value="大二" />
+            <el-option label="大三" value="大三" />
+            <el-option label="大四" value="大四" />
           </el-select>
         </el-form-item>
         
@@ -738,7 +724,9 @@ onMounted(async () => {
             <el-option label="下学期" value="下学期" />
           </el-select>
         </el-form-item>
-        
+        <el-form-item label="学生人数" required>
+          <el-input v-model="courseForm.studentsCount" placeholder="请输入学生人数" />
+        </el-form-item>
         <el-form-item label="课程描述">
           <el-input 
             v-model="courseForm.description" 
