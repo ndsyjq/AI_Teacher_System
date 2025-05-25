@@ -10,6 +10,7 @@ import ResourceLibrary from './components/ResourceLibrary.vue';
 import UserProfile from './components/UserProfile.vue';
 import PasswordChange from './components/PasswordChange.vue';
 import SystemSettings from './components/SystemSettings.vue';
+import ExamPaper from './components/ExamPaper.vue';
 import { userService } from './services';
 import {
   ArrowDown,
@@ -326,11 +327,14 @@ emitter.on('change-menu', (menu) => {
         </el-menu-item>
         <el-menu-item index="resources">
           <el-icon><Collection /></el-icon>
-          <span>资源库</span>
+          <span>题库</span>
+        </el-menu-item>
+        <el-menu-item index="exam-paper">
+          <el-icon><Document /></el-icon>
+          <span>出卷中心</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
-
     <!-- Main Content -->
     <el-container class="main-section">
       <el-header class="app-header">
@@ -358,6 +362,7 @@ emitter.on('change-menu', (menu) => {
         <LessonPlanner v-if="activeMenu === 'lesson-plan'" />
         <AIAssistant v-if="activeMenu === 'ai-assistant'" />
         <ResourceLibrary v-if="activeMenu === 'resources'" />
+        <ExamPaper v-if="activeMenu === 'exam-paper'" />
         <UserProfile v-if="activeMenu === 'profile'" />
         <PasswordChange v-if="activeMenu === 'password'" />
         <SystemSettings v-if="activeMenu === 'settings'" />

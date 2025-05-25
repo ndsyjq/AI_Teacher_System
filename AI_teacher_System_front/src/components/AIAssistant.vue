@@ -18,7 +18,22 @@
                   class="message-content"
                   :class="message.type === 'user' ? 'user-content' : 'ai-content'"
                   style="white-space: pre-line;">
-                  {{ message.content }}
+                  <template v-if="message.type === 'ai' && message.questionData">
+                    <div class="question-display">
+                      <h3>生成的题目：</h3>
+                      <p class="question-title">{{ message.questionData.title }}</p>
+                      <div class="options">
+                        <p>A. {{ message.questionData.optionA }}</p>
+                        <p>B. {{ message.questionData.optionB }}</p>
+                        <p>C. {{ message.questionData.optionC }}</p>
+                        <p>D. {{ message.questionData.optionD }}</p>
+                      </div>
+                      <p class="answer">正确答案：{{ message.questionData.answer }}</p>
+                    </div>
+                  </template>
+                  <template v-else>
+                    {{ message.content }}
+                  </template>
               </div>
 
             </div>
@@ -79,14 +94,31 @@ const userInput = ref('');
       const response = await aiAssistantService.sendMessage(userMessage);
       // 清理AI回复内容，移除</think>标签前的内容
 
-      if (response.data  && typeof response.data === 'string') {
-        const aiContent = response.data;
+      if (response.data) {
+        let aiContent;
+        let questionData = null;
+
+        // 检查响应是否包含题目数据
+        if (typeof response.data === 'object' && response.data.title) {
+          aiContent = '已为您生成以下题目：';
+          questionData = {
+            title: response.data.title,
+            optionA: response.data.optionA,
+            optionB: response.data.optionB,
+            optionC: response.data.optionC,
+            optionD: response.data.optionD,
+            answer: response.data.answer
+          };
+        } else if (typeof response.data === 'string') {
+          aiContent = response.data;
+        }
 
         // 更新最后一条AI消息
         const lastIndex = messages.value.length - 1;
         messages.value[lastIndex] = {
           type: 'ai',
           content: aiContent,
+          questionData: questionData,
           isLoading: false
         };
       } else {
@@ -182,5 +214,39 @@ const userInput = ref('');
 .input-tip {
   color: #999;
   font-size: 12px;
+}
+
+.question-display {
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.question-display h3 {
+  color: #1890ff;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.question-title {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 15px;
+  line-height: 1.5;
+}
+
+.options p {
+  margin: 8px 0;
+  padding: 8px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.answer {
+  margin-top: 15px;
+  font-weight: bold;
+  color: #52c41a;
 }
 </style>

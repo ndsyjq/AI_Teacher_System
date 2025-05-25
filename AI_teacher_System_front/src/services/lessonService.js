@@ -8,18 +8,23 @@ const lessonService = {
   },
   
   // AI智能生成备课内容
-  generateAIContent(lessonData) {
-    return api.post('/api/lesson-plans/generate', lessonData);
+  generateAIContent() {
+    return api.post('/api/ai/ask', { query: `${content}`,
+      stream:"false",
+      conversation_id: "",
+      user: 'neil' });
   },
   
   // 编辑备课计划
   updateLessonPlan(lessonData) {
     return api.put(`/api/lesson/update`, lessonData);
   },
-  
   // AI优化备课内容
-  optimizeLessonPlan(lessonId, lessonData) {
-    return api.post(`/api/lesson-plans/${lessonId}/optimize`, lessonData);
+  optimizeLessonPlan(subject,chapter, content) {
+    return api.post(`/api/question/insertQuestion?subject=${subject}&chapter=${chapter}`, { query: `${content}`,
+      stream:"false",
+      conversation_id: "",
+      user: 'neil' });
   },
   deleteLessonPlan(lessonId) {
     return api.delete(`/api/lesson/delete?id=${lessonId}`);

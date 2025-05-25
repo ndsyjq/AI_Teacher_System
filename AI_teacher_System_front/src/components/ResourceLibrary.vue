@@ -2,12 +2,16 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { questionService } from '../services';
+import axios from 'axios';
+import {Delete, Download, Edit, Plus, RefreshRight, Search, Upload, View} from "@element-plus/icons-vue";
+import * as XLSX from 'xlsx';
 
 // 题目类型
 const questionTypes = ref([]);
 
 // 题目数据
 const questions = ref([]);
+const allQuestions = ref([]);
 
 // 搜索关键词
 const searchKeyword = ref('');
@@ -79,32 +83,46 @@ const grades = ref([
 
 // 难度列表
 const difficultyLevels = ref([
-  { label: '简单', value: '简单' },
-  { label: '中等', value: '中等' },
-  { label: '困难', value: '困难' }
+  { label: '简单', value: '1' },
+  { label: '中等', value: '2' },
+  { label: '困难', value: '3' }
 ]);
-
+const answers = ref([
+  { label: '选项A', value: 'A' },
+  { label: '选项B', value: 'B' },
+  { label: '选项C', value: 'C' },
+  { label: '选项D', value: 'D'}
+]);
 // 表格加载状态
 const tableLoading = ref(false);
+
+// 编辑对话框可见性
+const editDialogVisible = ref(false);
+
+// 编辑表单数据
+const editForm = reactive({
+  id: '',
+  title: '',
+  type: '',
+  subject: '',
+  chapter: '',
+  difficulty: '',
+  optionA: '',
+  optionB: '',
+  optionC: '',
+  optionD: '',
+  answer: ''
+});
 
 // 获取题目列表
 const fetchQuestions = async () => {
   try {
     tableLoading.value = true;
-    const params = {
-      page: pagination.currentPage,
-      size: pagination.pageSize,
-      keyword: searchKeyword.value,
-      type: filters.type,
-      subject: filters.subject,
-      grade: filters.grade,
-      difficulty: filters.difficulty
-    };
-    
-    const response = await questionService.getQuestions(params);
+    const response = await questionService.getQuestions();
     if (response.code === 200) {
-      questions.value = response.data.records || [];
-      pagination.total = response.data.total || 0;
+      allQuestions.value = response.data || [];
+      pagination.total = allQuestions.value.length || 0;
+      applyFiltersAndPagination();
     } else {
       ElMessage.error(response.message || '获取题目列表失败');
     }
@@ -147,30 +165,27 @@ const fetchQuestionTypes = async () => {
     ];
   }
 };
-
 // 组件加载时获取数据
 onMounted(() => {
   fetchQuestionTypes();
   fetchQuestions();
 });
-
 // 处理页码变化
 const handleCurrentChange = (page) => {
   pagination.currentPage = page;
-  fetchQuestions();
+  applyFiltersAndPagination();
 };
-
 // 处理每页条数变化
 const handleSizeChange = (size) => {
   pagination.pageSize = size;
   pagination.currentPage = 1;
-  fetchQuestions();
+  applyFiltersAndPagination();
 };
 
 // 处理搜索和筛选
 const handleSearch = () => {
   pagination.currentPage = 1;
-  fetchQuestions();
+  applyFiltersAndPagination();
 };
 
 // 重置筛选条件
@@ -181,7 +196,49 @@ const resetFilters = () => {
   filters.grade = '';
   filters.difficulty = '';
   pagination.currentPage = 1;
-  fetchQuestions();
+  applyFiltersAndPagination();
+};
+
+// 前端筛选和分页
+const applyFiltersAndPagination = () => {
+  // 应用筛选条件
+  let filteredData = allQuestions.value;
+  
+  // 关键词搜索
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase();
+    filteredData = filteredData.filter(item => 
+      item.title && item.title.toLowerCase().includes(keyword)
+    );
+  }
+  
+  // 类型筛选
+  if (filters.type) {
+    filteredData = filteredData.filter(item => item.type === filters.type);
+  }
+  
+  // 学科筛选
+  if (filters.subject) {
+    filteredData = filteredData.filter(item => item.subject === filters.subject);
+  }
+  
+  // 年级筛选
+  if (filters.grade) {
+    filteredData = filteredData.filter(item => item.grade === filters.grade);
+  }
+  
+  // 难度筛选
+  if (filters.difficulty) {
+    filteredData = filteredData.filter(item => item.difficulty === filters.difficulty);
+  }
+  
+  // 更新总数
+  pagination.total = filteredData.length;
+  
+  // 应用分页
+  const startIndex = (pagination.currentPage - 1) * pagination.pageSize;
+  const endIndex = startIndex + pagination.pageSize;
+  questions.value = filteredData.slice(startIndex, endIndex);
 };
 
 // 打开上传对话框
@@ -191,22 +248,21 @@ const openUploadDialog = () => {
 
 // 上传题目
 const uploadQuestion = async () => {
-  if (!uploadForm.title || !uploadForm.type) {
+  if (!uploadForm.title || !uploadForm.chapter || !uploadForm.subject|| !uploadForm.chapter) {
     ElMessage.warning('请填写必填项');
     return;
   }
-  
   try {
     const questionData = {
       title: uploadForm.title,
-      type: uploadForm.type,
+      chapter: uploadForm.chapter,
       subject: uploadForm.subject,
-      grade: uploadForm.grade,
       difficulty: uploadForm.difficulty,
-      score: parseInt(uploadForm.score) || 5,
-      content: uploadForm.content,
+      optionA: uploadForm.optionA,
+      optionB: uploadForm.optionB,
+      optionC: uploadForm.optionC,
+      optionD: uploadForm.optionD,
       answer: uploadForm.answer,
-      analysis: uploadForm.analysis
     };
     
     const response = await questionService.addQuestion(questionData);
@@ -215,20 +271,20 @@ const uploadQuestion = async () => {
       ElMessage.success('添加题目成功');
       // 重置表单
       uploadForm.title = '';
-      uploadForm.type = '';
+      uploadForm.chapter = '';
       uploadForm.subject = '';
-      uploadForm.grade = '';
+      uploadForm.optionA = '';
       uploadForm.difficulty = '';
-      uploadForm.score = '';
-      uploadForm.content = '';
+      uploadForm.optionB = '';
+      uploadForm.optionC = '';
       uploadForm.answer = '';
-      uploadForm.analysis = '';
+      uploadForm.optionD = '';
       
       // 关闭对话框
       uploadDialogVisible.value = false;
       
       // 刷新列表
-      fetchQuestions();
+      await fetchQuestions();
     } else {
       ElMessage.error(response.message || '添加题目失败');
     }
@@ -321,7 +377,6 @@ const previewQuestion = async (question) => {
     ElMessage.error('获取题目详情失败，请稍后再试');
   }
 };
-
 // 删除题目
 const deleteQuestion = (question) => {
   ElMessageBox.confirm(
@@ -359,33 +414,32 @@ const getPreviewContent = (question) => {
   
   // 根据题目类型返回不同的预览内容
   let previewHtml = `<div class="question-preview">`;
-  
-  // 题目类型和分值
-  previewHtml += `<div class="question-type-score">
-                    <span class="question-type">[${question.type}]</span>
-                    <span class="question-score">(${question.score}分)</span>
-                  </div>`;
-  
   // 题目内容
   previewHtml += `<div class="question-content">
-                    <p>${question.title}</p>
-                    <p>${question.content || '暂无题目内容'}</p>
+                    <p>${question.title || '无标题'}</p>
+                    <p>${question.content || ''}</p>
                   </div>`;
   
-  // 根据题型展示不同的选项或答题区域
-  if (question.type === '单选题' || question.type === '多选题') {
-    // 假设选项数据在options中
-    const options = question.options || [
-      { label: 'A', content: '选项A的内容' },
-      { label: 'B', content: '选项B的内容' },
-      { label: 'C', content: '选项C的内容' },
-      { label: 'D', content: '选项D的内容' }
-    ];
-    
+  // 选项展示
+  if (question.optionA || question.optionB || question.optionC || question.optionD) {
     previewHtml += `<div class="question-options">`;
-    options.forEach(option => {
-      previewHtml += `<div class="option"><span>${option.label}.</span> ${option.content}</div>`;
-    });
+
+    if (question.optionA) {
+      previewHtml += `<div class="option"><span>A.</span> ${question.optionA}</div>`;
+    }
+
+    if (question.optionB) {
+      previewHtml += `<div class="option"><span>B.</span> ${question.optionB}</div>`;
+    }
+
+    if (question.optionC) {
+      previewHtml += `<div class="option"><span>C.</span> ${question.optionC}</div>`;
+    }
+
+    if (question.optionD) {
+      previewHtml += `<div class="option"><span>D.</span> ${question.optionD}</div>`;
+    }
+
     previewHtml += `</div>`;
   } else if (question.type === '判断题') {
     previewHtml += `<div class="question-options">
@@ -402,23 +456,95 @@ const getPreviewContent = (question) => {
                       <div class="answer-lines"></div>
                     </div>`;
   }
+
+  // 章节和难度信息
+
   
   // 标准答案和解析
   previewHtml += `<div class="question-answer">
                     <div class="answer-header">参考答案：</div>
                     <div class="answer-content">${question.answer || '暂无答案'}</div>
                   </div>
-                  <div class="question-analysis">
-                    <div class="analysis-header">解析：</div>
-                    <div class="analysis-content">${question.analysis || '暂无解析'}</div>
+                  `;
+  previewHtml += `<div class="question-meta">
+                    <div><strong>创建时间：</strong>${formatDate(question.createdAt)}</div>
                   </div>`;
-  
   previewHtml += `</div>`;
   
   return previewHtml;
 };
 
+// 格式化难度显示
+const getDifficultyText = (difficulty) => {
+  if (!difficulty) return '未知';
+  
+  // 如果difficulty是数字
+  if (!isNaN(difficulty)) {
+    const diffLevel = parseInt(difficulty);
+    switch (diffLevel) {
+      case 1: return '简单';
+      case 2: return '中等';
+      case 3: return '困难';
+      default: return `${difficulty}`;
+    }
+  }
+  
+  return difficulty;
+};
+
+// 格式化日期
+const formatDate = (dateString) => {
+  if (!dateString) return '未知';
+  
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (e) {
+    return dateString;
+  }
+};
+// 获取难度标签类型
+const getDifficultyTagType = (difficulty) => {
+  if (!difficulty) return '';
+  
+  // 如果difficulty是数字
+  if (!isNaN(difficulty)) {
+    const diffLevel = parseInt(difficulty);
+    switch (diffLevel) {
+      case 1: return 'success'; // 简单
+      case 2: return 'warning'; // 中等
+      case 3: return 'danger';  // 困难
+      default: return '';       // 默认
+    }
+  }
+// 如果difficulty是字符串
+  if (typeof difficulty === 'string') {
+    // 尝试转换为数字（处理"1"这样的字符串数字）
+    const num = parseInt(difficulty, 10);
+    if (!isNaN(num)) {
+      const diffLevel = num;
+      switch (diffLevel) {
+        case 1: return 'success'; // 简单
+        case 2: return 'warning'; // 中等
+        case 3: return 'danger';  // 困难
+        default: return '';
+      }
+    }
+    // 转换失败则检查关键词
+    if (difficulty.includes('简单')) return 'success';
+    if (difficulty.includes('中等')) return 'warning';
+    if (difficulty.includes('困难')) return 'danger';
+  }
+  return '';
+};
 // 导出题目
+
 const exportQuestions = async () => {
   try {
     ElMessage.info('正在准备导出...');
@@ -455,6 +581,8 @@ const exportQuestions = async () => {
 // 批量导入题目对话框
 const importDialogVisible = ref(false);
 const importFile = ref(null);
+ const fileList = ref([]);
+const importLoading = ref(false);
 
 // 打开导入对话框
 const openImportDialog = () => {
@@ -463,71 +591,260 @@ const openImportDialog = () => {
 
 // 导入题目
 const importQuestions = async () => {
+  console.log('开始导入流程');
   if (!importFile.value) {
     ElMessage.warning('请选择要导入的Excel文件');
     return;
   }
   
+  console.log('文件对象详情:', importFile.value);
+  console.log('文件类型:', importFile.value.type);
+  console.log('文件名:', importFile.value.name);
+  console.log('文件大小:', importFile.value.size, '字节');
+  
+  // 验证文件类型
+  const allowedTypes = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+  const fileExt = importFile.value.name.split('.').pop().toLowerCase();
+  console.log('文件扩展名:', fileExt);
+  
+  if (!allowedTypes.includes(importFile.value.type) && 
+      fileExt !== 'xlsx' && fileExt !== 'xls') {
+    ElMessage.error(`请选择Excel文件（.xls或.xlsx格式），当前文件类型: ${importFile.value.type}`);
+    return;
+  }
+  
+  // 验证文件大小（限制10MB）
+  const maxSize = 10 * 1024 * 1024;
+  if (importFile.value.size > maxSize) {
+    ElMessage.error(`文件大小不能超过10MB，当前大小: ${(importFile.value.size / 1024 / 1024).toFixed(2)}MB`);
+    return;
+  }
+  
   try {
-    const formData = new FormData();
-    formData.append('file', importFile.value);
+    importLoading.value = true;
+    ElMessage.info('正在处理文件，请稍候...');
     
+    // 创建新的FormData对象
+    const formData = new FormData();
+    
+    // 确保使用正确的字段名'file'，这必须与后端期望的字段名一致
+    formData.append('file', importFile.value, importFile.value.name);
+    
+    // 验证FormData内容
+    console.log('FormData内容:');
+    for (let pair of formData.entries()) {
+      console.log(pair[0] + ':', pair[1]);
+      if (pair[0] === 'file') {
+        console.log('file字段类型:', Object.prototype.toString.call(pair[1]));
+        console.log('file字段名称:', pair[1].name);
+      }
+    }
+    
+    console.log('开始发送请求...');
+    
+    // 使用questionService发送请求
     const response = await questionService.importQuestions(formData);
     
+    console.log('请求响应:', response);
+    
     if (response.code === 200) {
-      ElMessage.success(`成功导入${response.data || 0}道题目`);
+      ElMessage.success(`成功导入题目`);
       importDialogVisible.value = false;
       importFile.value = null;
+      fileList.value = [];
       fetchQuestions();
     } else {
+      console.error('导入失败，服务器返回:', response);
       ElMessage.error(response.message || '导入失败');
     }
   } catch (error) {
     console.error('导入题目失败:', error);
-    ElMessage.error('导入题目失败，请稍后再试');
+    // 详细记录错误信息
+    if (error.response) {
+      console.error('错误响应状态:', error.response.status);
+      console.error('错误响应头:', error.response.headers);
+      console.error('错误响应数据:', error.response.data);
+      ElMessage.error(`导入失败: ${error.response.data?.message || error.message || '请检查文件格式'}`);
+    } else if (error.request) {
+      console.error('请求已发送但没有收到响应');
+      console.error('请求对象:', error.request);
+      ElMessage.error('服务器无响应，请检查网络连接');
+    } else {
+      console.error('请求配置错误:', error.message);
+      ElMessage.error(`请求错误: ${error.message}`);
+    }
+  } finally {
+    importLoading.value = false;
   }
 };
 
 // 处理文件上传
 const handleFileChange = (file) => {
-  importFile.value = file.raw;
+  console.log('文件选择事件:', file);
+  console.log('文件对象结构:', JSON.stringify(file, (key, value) => {
+    if (key === 'raw') return '[File对象]';
+    return value;
+  }));
+  
+  // 当auto-upload为false时，file.raw包含实际的File对象
+  if (file && file.raw) {
+    console.log('文件raw对象类型:', Object.prototype.toString.call(file.raw));
+    console.log('文件raw是否为File:', file.raw instanceof File);
+    console.log('文件raw是否为Blob:', file.raw instanceof Blob);
+    console.log('文件raw名称:', file.raw.name);
+    console.log('文件raw类型:', file.raw.type);
+    console.log('文件raw大小:', file.raw.size);
+    
+    importFile.value = file.raw;
+    fileList.value = [{ name: file.raw.name, size: file.raw.size }];
+    console.log('文件已设置:', importFile.value.name);
+  } else if (file && file.name) {
+    // 直接使用file对象
+    console.log('直接使用file对象');
+    importFile.value = file;
+    fileList.value = [{ name: file.name, size: file.size }];
+    console.log('文件已设置(直接):', importFile.value.name);
+  } else {
+    console.error('文件对象无效:', file);
+    importFile.value = null;
+    fileList.value = [];
+  }
 };
 
+// 自定义上传方法
+const customUpload = (options) => {
+  console.log('自定义上传方法被调用:', options);
+  console.log('上传文件对象类型:', Object.prototype.toString.call(options.file));
+  console.log('上传文件是否为File:', options.file instanceof File);
+  console.log('上传文件是否为Blob:', options.file instanceof Blob);
+  
+  // 这里不执行实际上传，只保存文件对象
+  if (options.file) {
+    importFile.value = options.file;
+    fileList.value = [{ name: options.file.name, size: options.file.size }];
+    console.log('通过customUpload设置文件:', options.file.name);
+    
+    // 模拟成功回调，通知el-upload组件上传成功
+    if (options.onSuccess) {
+      options.onSuccess('上传成功');
+    }
+  } else if (options.onError) {
+    options.onError('文件对象无效');
+  }
+};
 // 批量下载选中题目
 const multipleSelection = ref([]);
 const handleSelectionChange = (selection) => {
   multipleSelection.value = selection;
 };
 
-// 批量下载
-const batchDownload = async () => {
-  if (multipleSelection.value.length === 0) {
-    ElMessage.warning('请选择要下载的题目');
+// 下载Excel导入模板
+const downloadTemplate = () => {
+  try {
+    // 创建一个工作簿对象
+    const workbook = XLSX.utils.book_new();
+    
+    // 创建表头数据（符合后端期望的字段）
+    const headers = ['title', 'optionA', 'optionB', 'optionC', 'optionD', 'answer', 'subject', 'chapter', 'difficulty'];
+    
+    // 创建示例数据
+    const exampleData = [
+      {
+        title: '1+1=?',
+        optionA: '1',
+        optionB: '2',
+        optionC: '3',
+        optionD: '4',
+        answer: 'B',
+        subject: '数学',
+        chapter: '加法',
+        difficulty: '简单'
+      }
+    ];
+    
+    // 将数据转换为工作表
+    const worksheet = XLSX.utils.json_to_sheet(exampleData, { header: headers });
+    
+    // 将工作表添加到工作簿
+    XLSX.utils.book_append_sheet(workbook, worksheet, '题目导入模板');
+    
+    // 将工作簿转换为二进制数据
+    const excelData = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+    
+    // 创建Blob对象
+    const blob = new Blob([excelData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    
+    // 创建下载链接
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '题目导入模板.xlsx';
+    document.body.appendChild(a);
+    a.click();
+
+    // 清理
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
+    
+    ElMessage.success('模板下载成功');
+  } catch (error) {
+    console.error('下载模板失败:', error);
+    ElMessage.error('下载模板失败，请稍后再试');
+  }
+};
+
+// 编辑题目方法
+const editQuestion = (question) => {
+  // 填充表单数据
+  editForm.id = question.id;
+  editForm.title = question.title;
+  editForm.type = question.type;
+  editForm.subject = question.subject;
+  editForm.chapter = question.chapter;
+  editForm.difficulty = question.difficulty;
+  editForm.optionA = question.optionA;
+  editForm.optionB = question.optionB;
+  editForm.optionC = question.optionC;
+  editForm.optionD = question.optionD;
+  editForm.answer = question.answer;
+  
+  // 显示编辑对话框
+  editDialogVisible.value = true;
+};
+
+// 提交编辑
+const submitEdit = async () => {
+  if (!editForm.title || !editForm.chapter || !editForm.subject) {
+    ElMessage.warning('请填写必填项');
     return;
   }
   
   try {
-    ElMessage.info('正在准备下载...');
+    const response = await questionService.updateQuestion({
+      id: editForm.id,
+      title: editForm.title,
+      chapter: editForm.chapter,
+      subject: editForm.subject,
+      difficulty: editForm.difficulty,
+      optionA: editForm.optionA,
+      optionB: editForm.optionB,
+      optionC: editForm.optionC,
+      optionD: editForm.optionD,
+      answer: editForm.answer
+    });
     
-    const questionIds = multipleSelection.value.map(item => item.id);
-    const response = await questionService.batchDownloadQuestions(questionIds);
-    
-    // 创建Blob对象
-    const blob = new Blob([response], { type: 'application/octet-stream' });
-    
-    // 创建下载链接
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.download = `批量题目_${new Date().toISOString().split('T')[0]}.zip`;
-    link.click();
-    
-    // 释放URL对象
-    window.URL.revokeObjectURL(link.href);
-    
-    ElMessage.success('批量下载成功');
+    if (response.code === 200) {
+      ElMessage.success('修改题目成功');
+      editDialogVisible.value = false;
+      fetchQuestions(); // 刷新题目列表
+    } else {
+      ElMessage.error(response.message || '修改题目失败');
+    }
   } catch (error) {
-    console.error('批量下载题目失败:', error);
-    ElMessage.error('批量下载题目失败，请稍后再试');
+    console.error('修改题目失败:', error);
+    ElMessage.error('修改题目失败，请稍后再试');
   }
 };
 </script>
@@ -550,17 +867,7 @@ const batchDownload = async () => {
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
-          
-          <el-select v-model="filters.type" placeholder="题目类型" clearable>
-            <el-option
-              v-for="type in questionTypes"
-              :key="type.id"
-              :label="type.name"
-              :value="type.name"
-            />
-          </el-select>
-          
-          <el-select v-model="filters.subject" placeholder="学科" clearable>
+          <el-select v-model="filters.subject" placeholder="课程" clearable>
             <el-option
               v-for="subject in subjects"
               :key="subject.value"
@@ -568,7 +875,6 @@ const batchDownload = async () => {
               :value="subject.value"
             />
           </el-select>
-          
           <el-select v-model="filters.grade" placeholder="年级" clearable>
             <el-option
               v-for="grade in grades"
@@ -608,10 +914,6 @@ const batchDownload = async () => {
           <el-button type="warning" @click="openImportDialog">
             <el-icon><Upload /></el-icon> 批量导入
           </el-button>
-          
-          <el-button type="info" @click="batchDownload" :disabled="multipleSelection.length === 0">
-            <el-icon><Download /></el-icon> 批量下载
-          </el-button>
         </div>
       </div>
       
@@ -625,25 +927,26 @@ const batchDownload = async () => {
         <el-table-column prop="title" label="题目标题" min-width="200" show-overflow-tooltip />
         <el-table-column prop="type" label="题型" width="100" />
         <el-table-column prop="subject" label="学科" width="80" />
-        <el-table-column prop="grade" label="年级" width="80" />
+        <el-table-column prop="chapter" label="章节" width="100" show-overflow-tooltip />
         <el-table-column prop="difficulty" label="难度" width="80">
           <template #default="scope">
             <el-tag 
-              :type="scope.row.difficulty === '简单' ? 'success' : 
-                    scope.row.difficulty === '中等' ? 'warning' : 'danger'"
+              :type="getDifficultyTagType(scope.row.difficulty)"
               size="small"
             >
-              {{ scope.row.difficulty }}
+              {{ getDifficultyText(scope.row.difficulty) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="score" label="分值" width="80" />
-        <el-table-column prop="uploadTime" label="上传时间" width="120" />
-        <el-table-column prop="usageCount" label="使用次数" width="100" />
+        <el-table-column prop="createdAt" label="创建时间" width="150">
+          <template #default="scope">
+            {{ formatDate(scope.row.createdAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="220">
           <template #default="scope">
-            <el-button size="small" type="primary" @click="downloadQuestion(scope.row)">
-              <el-icon><Download /></el-icon> 下载
+            <el-button size="small" type="primary" @click="editQuestion(scope.row)">
+              <el-icon><Edit /></el-icon> 修改
             </el-button>
             <el-button size="small" @click="previewQuestion(scope.row)">
               <el-icon><View /></el-icon> 预览
@@ -671,49 +974,14 @@ const batchDownload = async () => {
     <!-- 添加题目对话框 -->
     <el-dialog v-model="uploadDialogVisible" title="添加题目" width="60%">
       <el-form :model="uploadForm" label-width="100px">
-        <el-form-item label="题目标题" required>
-          <el-input v-model="uploadForm.title" placeholder="请输入题目标题" />
-        </el-form-item>
-        
-        <el-form-item label="题目类型" required>
-          <el-select v-model="uploadForm.type" placeholder="请选择题目类型" style="width: 100%">
-            <el-option
-              v-for="type in questionTypes"
-              :key="type.id"
-              :label="type.name"
-              :value="type.name"
-            />
-          </el-select>
-        </el-form-item>
-        
-        <el-row :gutter="20">
-          <el-col :span="8">
             <el-form-item label="学科">
-              <el-select v-model="uploadForm.subject" placeholder="请选择学科" style="width: 100%">
-                <el-option
-                  v-for="subject in subjects"
-                  :key="subject.value"
-                  :label="subject.label"
-                  :value="subject.value"
-                />
-              </el-select>
+              <el-input v-model="uploadForm.subject" placeholder="请输入课程" style="width: 100%">
+              </el-input>
             </el-form-item>
-          </el-col>
-          
-          <el-col :span="8">
-            <el-form-item label="适用年级">
-              <el-select v-model="uploadForm.grade" placeholder="请选择年级" style="width: 100%">
-                <el-option
-                  v-for="grade in grades"
-                  :key="grade.value"
-                  :label="grade.label"
-                  :value="grade.value"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          
-          <el-col :span="8">
+        <el-form-item label="课程" required>
+          <el-input v-model="uploadForm.chapter" placeholder="请输入章节" style="width: 100%">
+          </el-input>
+        </el-form-item>
             <el-form-item label="难度">
               <el-select v-model="uploadForm.difficulty" placeholder="请选择难度" style="width: 100%">
                 <el-option
@@ -724,39 +992,41 @@ const batchDownload = async () => {
                 />
               </el-select>
             </el-form-item>
-          </el-col>
-        </el-row>
-        
-        <el-form-item label="分值">
-          <el-input-number v-model="uploadForm.score" :min="1" :max="100" />
-        </el-form-item>
-        
         <el-form-item label="题目内容" required>
           <el-input 
-            v-model="uploadForm.content" 
+            v-model="uploadForm.title"
             type="textarea" 
             :rows="4" 
             placeholder="请输入题目内容"
           />
         </el-form-item>
-        
+        <el-form-item label="选项A">
+              <el-input v-model="uploadForm.optionA" placeholder="请输入答案A" style="width: 100%">
+              </el-input>
+            </el-form-item>
+        <el-form-item label="选项B">
+              <el-input v-model="uploadForm.optionB" placeholder="请输入答案B" style="width: 100%">
+              </el-input>
+            </el-form-item>
+        <el-form-item label="选项C">
+              <el-input v-model="uploadForm.optionC" placeholder="请输入答案C" style="width: 100%">
+              </el-input>
+            </el-form-item>
+        <el-form-item label="选项D">
+              <el-input v-model="uploadForm.optionD" placeholder="请输入答案D" style="width: 100%">
+              </el-input>
+        </el-form-item>
         <el-form-item label="标准答案">
-          <el-input 
-            v-model="uploadForm.answer" 
-            type="textarea" 
-            :rows="3" 
-            placeholder="请输入标准答案"
-          />
-        </el-form-item>
-        
-        <el-form-item label="解析说明">
-          <el-input 
-            v-model="uploadForm.analysis" 
-            type="textarea" 
-            :rows="3" 
-            placeholder="请输入解析说明"
-          />
-        </el-form-item>
+              <el-select v-model="uploadForm.answer" placeholder="请选择正确答案" style="width: 100%">
+                <el-option
+                    v-for="level in answers"
+                    :key="level.value"
+                    :label="level.label"
+                    :value="level.value"
+                />
+              </el-select>
+            </el-form-item>
+
       </el-form>
       
       <template #footer>
@@ -776,21 +1046,32 @@ const batchDownload = async () => {
         :limit="1"
         accept=".xlsx,.xls"
         :on-change="handleFileChange"
+        :http-request="customUpload"
+        :show-file-list="true"
+        :file-list="fileList"
+        :multiple="false"
+        drag
       >
         <template #trigger>
           <el-button type="primary">选择Excel文件</el-button>
         </template>
         <template #tip>
           <div class="el-upload__tip">
-            请上传符合模板格式的Excel文件，<a href="#">点击下载模板</a>
+            请上传符合模板格式的Excel文件，<a href="#" @click.prevent="downloadTemplate">点击下载模板</a>
           </div>
         </template>
       </el-upload>
       
+      <div v-if="importFile" class="selected-file-info" style="margin-top: 15px; padding: 10px; background-color: #f5f7fa; border-radius: 4px;">
+        <p><strong>已选择文件:</strong> {{ importFile.name }}</p>
+        <p><strong>文件大小:</strong> {{ (importFile.size / 1024).toFixed(2) }} KB</p>
+        <p><strong>文件类型:</strong> {{ importFile.type || '未知' }}</p>
+      </div>
+      
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="importDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="importQuestions">导入</el-button>
+          <el-button type="primary" @click="importQuestions" :loading="importLoading">导入</el-button>
         </span>
       </template>
     </el-dialog>
@@ -801,15 +1082,12 @@ const batchDownload = async () => {
         <div class="preview-header">
           <h3>{{ currentQuestion.title }}</h3>
           <div class="preview-info">
-            <span>题型：{{ currentQuestion.type }}</span>
             <span>学科：{{ currentQuestion.subject }}</span>
-            <span>难度：{{ currentQuestion.difficulty }}</span>
-            <span>分值：{{ currentQuestion.score }}分</span>
+            <span>章节：{{ currentQuestion.chapter }}</span>
+            <span>难度：{{ getDifficultyText(currentQuestion.difficulty) }}</span>
           </div>
         </div>
-        
         <div class="preview-content" v-html="getPreviewContent(currentQuestion)"></div>
-        
         <div class="preview-footer">
           <el-button type="primary" @click="downloadQuestion(currentQuestion)">
             <el-icon><Download /></el-icon> 下载此题目
@@ -817,7 +1095,7 @@ const batchDownload = async () => {
         </div>
       </div>
     </el-dialog>
-    
+
     <!-- 下载进度对话框 -->
     <el-dialog v-model="downloadProgressVisible" title="下载进度" width="30%" :close-on-click-modal="false" :show-close="false">
       <div v-if="currentQuestion" class="download-progress">
@@ -825,6 +1103,71 @@ const batchDownload = async () => {
         <el-progress :percentage="downloadProgress" :status="downloadProgress === 100 ? 'success' : ''"></el-progress>
         <p class="download-status">{{ downloadStatus }}</p>
       </div>
+    </el-dialog>
+
+    <!-- 编辑题目对话框 -->
+    <el-dialog v-model="editDialogVisible" title="编辑题目" width="60%">
+      <el-form :model="editForm" label-width="100px">
+        <el-form-item label="学科">
+          <el-input v-model="editForm.subject" placeholder="请输入课程" style="width: 100%">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="课程" required>
+          <el-input v-model="editForm.chapter" placeholder="请输入章节" style="width: 100%">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="难度">
+          <el-select v-model="editForm.difficulty" placeholder="请选择难度" style="width: 100%">
+            <el-option
+              v-for="level in difficultyLevels"
+              :key="level.value"
+              :label="level.label"
+              :value="level.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="题目内容" required>
+          <el-input 
+            v-model="editForm.title"
+            type="textarea" 
+            :rows="4" 
+            placeholder="请输入题目内容"
+          />
+        </el-form-item>
+        <el-form-item label="选项A">
+          <el-input v-model="editForm.optionA" placeholder="请输入答案A" style="width: 100%">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="选项B">
+          <el-input v-model="editForm.optionB" placeholder="请输入答案B" style="width: 100%">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="选项C">
+          <el-input v-model="editForm.optionC" placeholder="请输入答案C" style="width: 100%">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="选项D">
+          <el-input v-model="editForm.optionD" placeholder="请输入答案D" style="width: 100%">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="标准答案">
+          <el-select v-model="editForm.answer" placeholder="请选择正确答案" style="width: 100%">
+            <el-option
+              v-for="level in answers"
+              :key="level.value"
+              :label="level.label"
+              :value="level.value"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitEdit">保存</el-button>
+        </span>
+      </template>
     </el-dialog>
   </div>
 </template>

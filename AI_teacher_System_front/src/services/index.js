@@ -6,6 +6,8 @@ import lessonService from './lessonService';
 import aiAssistantService from './aiAssistantService';
 import systemSettingService from './systemSettingService';
 import questionService from './questionService';
+import examService from './examService';
+import questionBankService from './questionBankService';
 
 export {
   api,
@@ -15,4 +17,6 @@ export {
   aiAssistantService,
   systemSettingService,
   questionService,
+  examService,
+  questionBankService,
 };
